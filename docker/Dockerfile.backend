@@ -1,0 +1,15 @@
+FROM golang:1.21-alpine AS api
+WORKDIR /app
+COPY ./api .
+RUN go mod download
+RUN go build -o /bin/ap1-api main.go
+
+FROM rust:latest AS core
+WORKDIR /app
+COPY ./core .
+RUN cargo build --release
+
+FROM alpine:latest
+COPY --from=api /bin/ap1-api /usr/local/bin/ap1-api
+COPY --from=core /app/target/release/ap1_core /usr/local/bin/ap1-core
+CMD ["/bin/sh"]

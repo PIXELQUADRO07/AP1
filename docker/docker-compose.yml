@@ -1,0 +1,15 @@
+services:
+  core:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.core
+    ports:
+      - "8081:8081"
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - core

@@ -1,0 +1,15 @@
+[package]
+name = "ap1_core"
+version = "0.1.0"
+authors = ["AP1 Team <ap1@example.com>"]
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+ap1_plugin_loader = { path = "../plugins/plugin_loader" }
+
+[build-dependencies]
+cc = "1.0"

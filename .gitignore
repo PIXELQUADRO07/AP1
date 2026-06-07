@@ -1,0 +1,65 @@
+# Rust
+/target/
+**/*.rs.bk
+**/*.rs.old
+**/*.rlib
+**/*.dSYM
+**/*.so
+**/*.dylib
+**/*.a
+**/*.o
+**/*.obj
+
+# Go
+/bin/
+**/*.exe
+**/*.test
+**/*.out
+**/*.log
+**/*.cache
+
+# Build artifacts
+/build/
+/dist/
+/tmp/
+*.tmp
+*.temp
+*.pid
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node
+/node_modules/
+/npm-debug.log*
+/yarn-debug.log*
+/yarn-error.log*
+/pnpm-debug.log*
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+*.tmproj
+*.sublime-project
+*.sublime-workspace
+
+# Docker
+**/Dockerfile.*.cache
+.docker/
+
+# Logs
+*.log
+
+# Misc
+*.lock
+.env
+.env.local
+*.pem
+*.key
+*.crt
+npm-debug.log*

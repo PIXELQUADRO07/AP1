@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+function print_help() {
+  cat <<'EOF'
+Usage: ap1 [command]
+
+Commands:
+  start       Build and start AP1 core + API services and open CLI
+  install     Build AP1 and prepare the launcher
+  help        Show this help message
+
+If no command is provided, AP1 will start core/API in background and open the CLI.
+
+Examples:
+  ./ap1
+  ./ap1 start
+  sudo ./ap1
+EOF
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    print_help
+    exit 0
+    ;;
+  install)
+    if ! command -v cargo >/dev/null 2>&1; then
+      echo "Errore: cargo non trovato. Installa Rust prima di proseguire."
+      exit 1
+    fi
+    if ! command -v go >/dev/null 2>&1; then
+      echo "Errore: go non trovato. Installa Go prima di proseguire."
+      exit 1
+    fi
+    mkdir -p "$ROOT_DIR/bin"
+    echo "[1/3] Build CLI..."
+    cd "$ROOT_DIR/cli"
+    go build -o "$ROOT_DIR/bin/ap1-cli"
+    echo "AP1 launcher pronto. Usa '$ROOT_DIR/ap1' per avviare AP1."
+    exit 0
+    ;;
+  start|"")
+    if ! command -v cargo >/dev/null 2>&1; then
+      echo "Errore: cargo non trovato. Installa Rust prima di proseguire."
+      exit 1
+    fi
+    if ! command -v go >/dev/null 2>&1; then
+      echo "Errore: go non trovato. Installa Go prima di proseguire."
+      exit 1
+    fi
+    mkdir -p "$ROOT_DIR/bin"
+    echo "[1/4] Build core..."
+    cd "$ROOT_DIR/core"
+    cargo build
+    echo "[2/4] Build API..."
+    cd "$ROOT_DIR/api"
+    go build -o "$ROOT_DIR/bin/ap1-api"
+    echo "[3/4] Build CLI..."
+    cd "$ROOT_DIR/cli"
+    go build -o "$ROOT_DIR/bin/ap1-cli"
+    echo "[4/4] Starting AP1 core and API in background..."
+    cd "$ROOT_DIR"
+    CORE_BIN="$ROOT_DIR/core/target/debug/ap1_core"
+    API_BIN="$ROOT_DIR/bin/ap1-api"
+    CLI_BIN="$ROOT_DIR/bin/ap1-cli"
+
+    "$CORE_BIN" &
+    CORE_PID=$!
+    "$API_BIN" -config "$ROOT_DIR/config/global.yaml" -plugins "$ROOT_DIR/config/plugins.yaml" -addr ":8080" &
+    API_PID=$!
+
+    function finish {
+      echo "\nStopping AP1..."
+      kill "$CORE_PID" "$API_PID" 2>/dev/null || true
+    }
+    trap finish EXIT INT TERM
+
+    sleep 2
+    echo "AP1 started."
+    echo "  core PID = $CORE_PID"
+    echo "  api  PID = $API_PID"
+    echo "Entering AP1 CLI interactive shell. Press Ctrl+C or type 'exit' to stop."
+
+    "$CLI_BIN" interactive
+    CLI_STATUS=$?
+
+    finish
+    exit "$CLI_STATUS"
+    ;;
+  *)
+    echo "Unknown command: $1"
+    print_help
+    exit 1
+    ;;
+esac

@@ -1,0 +1,100 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+)
+
+func startREPL() {
+    reader := bufio.NewReader(os.Stdin)
+    fmt.Println("AP1 interactive shell. Type 'help' for commands, 'exit' to quit.")
+    for {
+        fmt.Print("ap1> ")
+        line, err := reader.ReadString('\n')
+        if err != nil {
+            fmt.Fprintln(os.Stderr, "error reading input:", err)
+            return
+        }
+        line = strings.TrimSpace(line)
+        if line == "" {
+            continue
+        }
+        parts := strings.Fields(line)
+        cmd := parts[0]
+        args := []string{}
+        if len(parts) > 1 {
+            args = parts[1:]
+        }
+
+        switch cmd {
+        case "exit", "quit":
+            return
+        case "help":
+            usage()
+        case "status":
+            cmdStatus()
+        case "health":
+            cmdHealth()
+        case "config":
+            cmdConfig()
+        case "start":
+            cmdStart(args)
+        case "stop":
+            cmdStop(args)
+        case "clients":
+            cmdClients(args)
+        case "ap":
+            cmdAP(args)
+        case "set":
+            cmdSet(args)
+        case "unset":
+            cmdUnset(args)
+        case "ignore":
+            cmdIgnore(args)
+        case "restore":
+            cmdRestore(args)
+        case "info":
+            cmdInfo(args)
+        case "jobs":
+            cmdJobs(args)
+        case "mode":
+            cmdMode(args)
+        case "profiles":
+            cmdProfiles(args)
+        case "plugins":
+            cmdPlugins(args)
+        case "proxies":
+            cmdProxies(args)
+        case "show":
+            cmdShow(args)
+        case "search":
+            cmdSearch(args)
+        case "use":
+            cmdUse(args)
+        case "dump":
+            cmdDump(args)
+        case "dhcpconf":
+            cmdDhcpconf(args)
+        case "dhcpmode":
+            cmdDhcpmode(args)
+        case "update":
+            cmdUpdate(args)
+        case "interfaces":
+            cmdInterfaces(args)
+        case "recon":
+            cmdRecon(args)
+        case "portal":
+            cmdPortal(args)
+        case "system":
+            cmdSystem(args)
+        case "templates":
+            cmdTemplates(args)
+        case "version":
+            cmdVersion()
+        default:
+            fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+        }
+    }
+}

@@ -1,0 +1,12 @@
+FROM golang:1.21-alpine AS build
+WORKDIR /app
+COPY ./api/go.mod ./api/go.sum ./api/
+RUN go mod download
+COPY ./api .
+RUN go build -o /usr/local/bin/ap1-api ./main.go
+
+FROM alpine:latest
+RUN apk add --no-cache ca-certificates
+COPY --from=build /usr/local/bin/ap1-api /usr/local/bin/ap1-api
+WORKDIR /app
+CMD ["/usr/local/bin/ap1-api"]

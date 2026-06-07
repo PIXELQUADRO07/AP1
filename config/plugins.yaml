@@ -1,0 +1,9 @@
+plugins:
+  - name: default-logger
+    type: core
+    enabled: true
+    description: Basic runtime logger for AP1 core events
+  - name: captive-portal
+    type: wasm
+    enabled: false
+    description: Captive portal landing page integration
