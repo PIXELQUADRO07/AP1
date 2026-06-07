@@ -81,6 +81,10 @@ func startREPL() {
             cmdDhcpmode(args)
         case "update":
             cmdUpdate(args)
+        case "banner":
+            cmdBanner(args)
+        case "clear":
+            cmdClear(args)
         case "interfaces":
             cmdInterfaces(args)
         case "recon":

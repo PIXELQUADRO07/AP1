@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 const (
@@ -63,12 +65,122 @@ func printSection(title string) {
 	fmt.Println(strings.Repeat("=", len(title)))
 }
 
+func randomBanner() string {
+	return banners[rand.Intn(len(banners))]
+}
+
+func randomStartBanner() string {
+	return startBanners[rand.Intn(len(startBanners))]
+}
+
+func randomInteractiveBanner() string {
+	return interactiveBanners[rand.Intn(len(interactiveBanners))]
+}
+
+func randomTagline() string {
+	return bannerTaglines[rand.Intn(len(bannerTaglines))]
+}
+
+func clearScreen() {
+	fmt.Print("\033[H\033[2J")
+}
+
+func cmdBanner(args []string) {
+	showBanner("")
+}
+
+func cmdClear(args []string) {
+	clearScreen()
+	showBanner("")
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 var apiBase = defaultAPIBase
 var dockerMode = false
 var dockerComposeFile = "docker/docker-compose.yml"
 var runtimeSettings = map[string]string{"api": defaultAPIBase}
 var ignoredLoggers = map[string]bool{}
 var currentModule = ""
+
+var banners = []string{
+	`
+  ____   ____  _   _ _____
+ |  _ \ / ___|| | | | ____|
+ | |_) | |  _ | | | |  _|
+ |  __/| |_| || |_| | |___
+ |_|    \____| \___/|_____|
+`,
+	`
+    ___   ____  ____  ______
+   / _ \ / ___||  _ \|  ____|
+  | | | | |  _ | |_) |  _|
+  | |_| | |_| ||  _ <| |___
+   \___/ \____||_| \_\_____|
+`,
+	`
+   ___    ____  _   _ _____
+  / _ \  / ___|| | | | ____|
+ | | | | \___ \| | | |  _|
+ | |_| |  ___) | |_| | |___
+  \___/  |____/ \___/|_____|
+`,
+	`
+  ____   ____  _____  _   _
+ |  _ \ / ___|| ____|| \ | |
+ | |_) | |  _ |  _|  |  \| |
+ |  _ <| |_| || |___ | |\  |
+ |_| \_\\____||_____||_| \_|
+`,
+}
+var startBanners = []string{
+	`
+   _____ _   _  _____ _____ _   _ ____  
+  |_   _| | | |/ ____|_   _| \ | |  _ \ 
+    | | | | | | (___   | | |  \| | |_) |
+    | | | | |\___ \  | | | .  |  _ < 
+   _| |_| |_| |____) |_| |_| |\  | |_) |
+  |_____|\___/|_____/|_____|_| \_|____/ 
+`,
+	`
+   _____ _   _ _____ _____  ______ _   _ 
+  / ____| \ | |_   _/ ____|/ ____| \ | |
+ | (___ |  \| | | || |    | |    |  \| |
+  \___ \| .  | | || |    | |    | .  |
+  ____) | |\  |_| || |____| |____| |\  |
+ |_____/|_| \_|_____|
+\_____|\_____|_| \_|
+`,
+}
+var interactiveBanners = []string{
+	`
+  _____ _   _ _____ _____  _____ ___ _____ 
+ |_   _| \ | |_   _/ ____|/ ____|__ \_   _|
+   | | |  \| | | || |  __| |       ) || |  
+   | | | .  | | || | |_ | |      / / | |  
+  _| |_| |\  |_| || |__| | |____ / /_ _| |_ 
+ |_____|_| \_|_____|
+\_____|_____|_____|_____|
+`,
+	`
+   _____ ___  _   _ _____ _____ _____ _____ 
+  / ____/ _ \| \ | |_   _/ ____|_   _/ ____|
+ | |   | | | |  \| | | || |      | || |     
+ | |   | | | | .  | | || |      | || |     
+ | |___| |_| | |\  |_| || |____ _| || |____ 
+  \_____\___/|_| \_|_____|
+\_____|
+\_____|_____|
+`,
+}
+var bannerTaglines = []string{
+	"edge-aware captive portal orchestrator",
+	"network trickery with a friendly face",
+	"AP management for modern pentesting",
+	"control APs, portals and payloads",
+}
 
 func doRequest(method, path string, body io.Reader) ([]byte, error) {
 	if dockerMode {
@@ -216,6 +328,7 @@ func cmdAP(args []string) {
 }
 
 func cmdStart(args []string) {
+	showBanner("start")
 	fmt.Println("starting AP and captive portal...")
 	if _, err := post("/api/system/hostapd/start", nil); err != nil {
 		fmt.Fprintln(os.Stderr, "hostapd start failed:", err)
@@ -889,20 +1002,30 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-func showBanner() {
-	banner := `
-    ___    ____   _____  _   _ 
-   / _ \  / ___| |  ___|| | | |
-  | | | || |  _  | |_   | | | |
-  | |_| || |_| | |  _|  | |_| |
-   \___/  \____| |_|     \___/ 
-`
+func showBanner(mode string) {
+	var banner string
+	switch mode {
+	case "start":
+		banner = randomStartBanner()
+	case "interactive":
+		banner = randomInteractiveBanner()
+	default:
+		banner = randomBanner()
+	}
 	fmt.Println(colorText(ansiCyan, banner))
-	fmt.Println(colorText(ansiGreen, ansiBold+buildTagline+ansiReset))
+	var tagline string
+	if mode == "start" {
+		tagline = "starting AP1..."
+	} else if mode == "interactive" {
+		tagline = "interactive AP1 console"
+	} else {
+		tagline = randomTagline()
+	}
+	fmt.Println(colorText(ansiGreen, ansiBold+"AP1 - "+tagline+ansiReset))
 }
 
 func usage() {
-	showBanner()
+	showBanner("")
 	fmt.Println(colorText(ansiYellow, "Usage:"))
 	fmt.Println("  ap1-cli [--api URL] <command> [args...]")
 	fmt.Println()
@@ -912,6 +1035,8 @@ func usage() {
 	fmt.Println("  health                       Check API health endpoint")
 	fmt.Println("  config                       Dump current loaded config")
 	fmt.Println("  version                      Show CLI version")
+	fmt.Println("  banner                       Show a random AP1 banner")
+	fmt.Println("  clear                        Clear the terminal and show a new banner")
 	fmt.Println("  clients                      Show connected clients")
 	fmt.Println()
 	fmt.Println(colorText(ansiYellow, "AP management:"))
@@ -941,6 +1066,8 @@ func usage() {
 	fmt.Println("  search <term>                Search available CLI commands")
 	fmt.Println("  use <module>                 Select a module")
 	fmt.Println("  dump credentials             Dump captured portal credentials")
+	fmt.Println("  banner                       Show a random AP1 banner")
+	fmt.Println("  clear                        Clear the terminal and show a new banner")
 	fmt.Println("  dhcpconf                     DHCP server configuration helpers")
 	fmt.Println("  dhcpmode                     DHCP mode helpers")
 	fmt.Println("  update                       Deprecated update command")
@@ -982,7 +1109,6 @@ func main() {
 		usage()
 		os.Exit(0)
 	}
-	showBanner()
 
 	cmd := flag.Arg(0)
 	args := flag.Args()[1:]
@@ -1033,6 +1159,10 @@ func main() {
 		cmdDhcpmode(args)
 	case "update":
 		cmdUpdate(args)
+	case "banner":
+		cmdBanner(args)
+	case "clear":
+		cmdClear(args)
 	case "interfaces":
 		cmdInterfaces(args)
 	case "recon":
@@ -1050,6 +1180,7 @@ func main() {
 	case "version":
 		cmdVersion()
 	case "interactive":
+		showBanner("interactive")
 		startREPL()
 	case "tui":
 		if err := startTUI(); err != nil {
