@@ -51,6 +51,7 @@ Struttura iniziale:
    ```bash
    ./ap1
    ```
+   La prima volta cercherà di installare automaticamente `ap1` nel tuo PATH, così potrai poi eseguirlo da qualsiasi directory.
    Oppure, per un avvio esplicito:
    ```bash
    ./ap1 start

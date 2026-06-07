@@ -55,6 +55,8 @@ Dalla root del progetto puoi avviare core e API in background e aprire la CLI co
 ./ap1
 ```
 
+La prima volta il comando cercherà di installare automaticamente `ap1` in una directory del PATH (`/usr/local/bin` o `~/.local/bin`).
+
 Oppure in modo esplicito:
 
 ```bash
