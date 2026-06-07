@@ -4,12 +4,12 @@ set -euo pipefail
 echo "AP1 install bootstrap"
 
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo non trovato. Installa Rust prima di proseguire."
+  echo "cargo not found. Install Rust before continuing."
   exit 1
 fi
 
 if ! command -v go >/dev/null 2>&1; then
-  echo "go non trovato. Installa Go prima di proseguire."
+  echo "go not found. Install Go before continuing."
   exit 1
 fi
 
@@ -30,4 +30,4 @@ cd cli
 go build -o ../ap1-cli
 cd ..
 
-echo "AP1 bootstrap completo. Usa './ap1' per avviare core e API con un solo comando, oppure usa 'make core' e 'make api' per avviarne i singoli componenti."
+echo "AP1 bootstrap complete. Use './ap1' to start core and API with one command, or use 'make core' and 'make api' to start components separately."

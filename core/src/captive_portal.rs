@@ -87,7 +87,7 @@ fn login_page(cfg: &PortalConfig) -> String {
 <html lang='en'>
 <head><meta charset='UTF-8'><title>AP1 Captive Portal</title></head>
 <body>
-<h1>Benvenuto su AP1 Captive Portal</h1>
+<h1>Welcome to AP1 Captive Portal</h1>
 <p>Portal IP: <strong>{}</strong></p>
 <form method='POST' action='/login'>
 <label>Login: <input name='login' required></label><br>
@@ -109,10 +109,10 @@ fn success_page(cfg: &PortalConfig) -> String {
 
     let body = r#"<!DOCTYPE html>
 <html lang='en'>
-<head><meta charset='UTF-8'><title>Accesso riuscito</title></head>
+<head><meta charset='UTF-8'><title>Login successful</title></head>
 <body>
-<h1>Accesso riuscito</h1>
-<p>Grazie. Ora puoi continuare la navigazione.</p>
+<h1>Login successful</h1>
+<p>Thank you. You may now continue browsing.</p>
 </body>
 </html>"#;
     build_response(body)

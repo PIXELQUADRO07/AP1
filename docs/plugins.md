@@ -1,17 +1,17 @@
 # Plugin System
 
-AP1 supporta un sistema di plugin modulari per estendere il core.
+AP1 supports a modular plugin system to extend the core.
 
-## Architettura
+## Architecture
 
-- `plugins/core_plugins/` contiene plugin Rust che possono essere caricati dal core.
-- `plugins/wasm_plugins/` contiene plugin compilati per WebAssembly.
-- `plugins/plugin_loader/` contiene un loader di plugin e un modello per i plugin.
-- `config/plugins.yaml` definisce i plugin disponibili e il loro stato `enabled`.
+- `plugins/core_plugins/` contains Rust plugins that can be loaded by the core.
+- `plugins/wasm_plugins/` contains plugins compiled for WebAssembly.
+- `plugins/plugin_loader/` contains a plugin loader and a plugin model.
+- `config/plugins.yaml` defines available plugins and their `enabled` state.
 
-## Configurazione
+## Configuration
 
-Il file `config/plugins.yaml` ha il formato:
+The file `config/plugins.yaml` uses the format:
 
 ```yaml
 plugins:
@@ -21,12 +21,12 @@ plugins:
     description: Basic runtime logger for AP1 core events
 ```
 
-## Endpoints API
+## API Endpoints
 
-- `GET /api/plugins` - lista i plugin disponibili
-- `POST /api/plugins/toggle` - abilita o disabilita un plugin
+- `GET /api/plugins` - list available plugins
+- `POST /api/plugins/toggle` - enable or disable a plugin
 
-Richiesta JSON:
+JSON request:
 
 ```json
 {
@@ -35,7 +35,7 @@ Richiesta JSON:
 }
 ```
 
-## Uso
+## Usage
 
-Nell’API il loader dei plugin può leggere `config/plugins.yaml` e decidere quali plugin caricare.
-Nel core, il plugin loader può estendere la pipeline di rete con plugin Rust o WASM.
+The API plugin loader can read `config/plugins.yaml` and decide which plugins to load.
+The core plugin loader can extend the network pipeline with Rust or WASM plugins.

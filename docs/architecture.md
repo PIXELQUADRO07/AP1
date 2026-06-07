@@ -2,36 +2,36 @@
 
 ## Overview
 
-AP1 è un framework modulare per la gestione di access point, proxy e strumenti di rete.
+AP1 is a modular framework for managing access points, proxies, and network tooling.
 
-Componenti principali:
+Main components:
 
-- `core/` - engine Rust per gestione AP, routing, stato e servizi di basso livello
-- `api/` - server Go per esporre REST, orchestrazione e logica di integrazione
-- `plugins/` - sistema plugin estendibile in Rust/WASM
-- `system/` - wrapper OS per hostapd, dnsmasq, nftables e gestione processi
-- `config/` - configurazione YAML globale, profili AP e plugin
+- `core/` - Rust engine for AP management, routing, state, and low-level services
+- `api/` - Go API server for REST orchestration and integration logic
+- `plugins/` - extensible plugin system with Rust/WASM support
+- `system/` - OS wrappers for hostapd, dnsmasq, nftables, and process management
+- `config/` - global YAML config, AP profiles, and plugin definitions
 
-## Component Interaction
+## Component interaction
 
-1. La CLI invia richieste all'API server su `http://localhost:8080`.
-2. L'API server legge la configurazione da `config/global.yaml` e gestisce endpoint CRUD.
-3. Alcuni endpoint API fanno proxy verso il core Rust su `http://127.0.0.1:8081`.
-4. Il core Rust espone `/status` e carica la configurazione al volo.
-5. La CLI mostra lo stato del core, la configurazione e i profili AP.
+1. The CLI sends requests to the API server at `http://localhost:8080`.
+2. The API server reads configuration from `config/global.yaml` and manages CRUD endpoints.
+3. Some API endpoints proxy to the Rust core at `http://127.0.0.1:8081`.
+4. The Rust core exposes `/status` and loads configuration on demand.
+5. The CLI displays core status, configuration, and AP profiles.
 
-## API Endpoints
+## API endpoints
 
-- `GET /health` - stato del server API
-- `GET /api/status` - stato del core e configurazione
-- `GET /api/config` - configurazione globale in JSON
-- `GET /api/profiles` - profili AP disponibili
-- `POST /api/profiles/select` - seleziona il profilo AP attivo
+- `GET /health` - API server health
+- `GET /api/status` - core status and configuration
+- `GET /api/config` - global config JSON
+- `GET /api/profiles` - available AP profiles
+- `POST /api/profiles/select` - select active AP profile
 
 ## Deployment
 
-- `make setup` installa e verifica dipendenze
-- `make core` avvia il core Rust
-- `make api` avvia l'API Go
-- `make docker` avvia i servizi con Docker Compose
-- `docker compose -f docker/docker-compose.yml up --build` avvia `core` e `api` in container Docker
+- `make setup` installs and verifies dependencies
+- `make core` starts the Rust core
+- `make api` starts the Go API
+- `make docker` starts services with Docker Compose
+- `docker compose -f docker/docker-compose.yml up --build` starts `core` and `api` in Docker containers

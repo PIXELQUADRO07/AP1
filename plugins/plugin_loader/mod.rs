@@ -1,6 +1,6 @@
-//! Loader di plugin AP1.
+//! AP1 plugin loader.
 //!
-//! Questo modulo espone le primitive per la scoperta e il caricamento dei plugin.
+//! This module exposes primitives for plugin discovery and loading.
 
 pub mod loader;
 

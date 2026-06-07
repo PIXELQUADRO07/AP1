@@ -1,6 +1,6 @@
 //! AP Manager module.
 //!
-//! Questo modulo gestisce la configurazione e il ciclo di vita degli access point.
+//! This module manages AP configuration and lifecycle.
 
 use crate::hostapd::{start_hostapd, stop_hostapd};
 use crate::system_control::{configure_interface, write_profile_configs};

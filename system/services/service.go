@@ -8,7 +8,7 @@ import (
     "strings"
 )
 
-// ServiceManager gestisce l'avvio e l'arresto dei servizi di sistema.
+// ServiceManager handles starting and stopping system services.
 
 type ServiceState string
 
@@ -39,7 +39,7 @@ func runCommand(name string, args ...string) (string, error) {
 
 func (s *ServiceManager) runAction(action string) (string, error) {
     if action != "start" && action != "stop" && action != "restart" && action != "status" {
-        return "", errors.New("azione non supportata")
+        return "", errors.New("action not supported")
     }
 
     if path, err := exec.LookPath("systemctl"); err == nil {
@@ -48,7 +48,7 @@ func (s *ServiceManager) runAction(action string) (string, error) {
     if path, err := exec.LookPath("service"); err == nil {
         return runCommand(path, s.Name, action)
     }
-    return "", errors.New("gestore servizi non disponibile")
+    return "", errors.New("service manager unavailable")
 }
 
 func (s *ServiceManager) Start() error {

@@ -1,6 +1,6 @@
-//! Scheletro del plugin loader.
+//! Plugin loader skeleton.
 //!
-//! Questo file illustra come definire metadati plugin e un loader di base.
+//! This file shows how to define plugin metadata and a basic loader.
 
 use serde::{Deserialize, Serialize};
 use std::fs;

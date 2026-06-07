@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -32,18 +33,61 @@ func colorText(color, text string) string {
 	return color + text + ansiReset
 }
 
-func printJSON(b []byte) {
-	var pretty interface{}
-	if err := json.Unmarshal(b, &pretty); err != nil {
-		fmt.Println(string(b))
+func printResponse(b []byte) {
+	data := bytes.TrimSpace(b)
+	if len(data) == 0 {
 		return
 	}
-	out, err := json.MarshalIndent(pretty, "", "  ")
-	if err != nil {
-		fmt.Println(string(b))
+	var parsed interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		fmt.Println(strings.TrimSpace(string(data)))
 		return
 	}
-	fmt.Println(string(out))
+	printValue(parsed, 0, "")
+}
+
+func printValue(value interface{}, indent int, prefix string) {
+	indentStr := strings.Repeat("  ", indent)
+	switch v := value.(type) {
+	case map[string]interface{}:
+		if prefix != "" {
+			fmt.Printf("%s%s:\n", indentStr, prefix)
+		}
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			val := v[k]
+			switch val.(type) {
+			case map[string]interface{}, []interface{}:
+				printValue(val, indent+1, k)
+			default:
+				fmt.Printf("%s  %s: %v\n", indentStr, k, val)
+			}
+		}
+	case []interface{}:
+		if prefix != "" {
+			fmt.Printf("%s%s:\n", indentStr, prefix)
+			indentStr = strings.Repeat("  ", indent+1)
+		}
+		for i, item := range v {
+			switch item.(type) {
+			case map[string]interface{}, []interface{}:
+				fmt.Printf("%s- item %d:\n", indentStr, i+1)
+				printValue(item, indent+2, "")
+			default:
+				fmt.Printf("%s- %v\n", indentStr, item)
+			}
+		}
+	default:
+		if prefix != "" {
+			fmt.Printf("%s%s: %v\n", indentStr, prefix, v)
+		} else {
+			fmt.Printf("%s%v\n", indentStr, v)
+		}
+	}
 }
 
 func printTable(headers []string, rows [][]string) {
@@ -277,7 +321,7 @@ func cmdStatus() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	printJSON(b)
+	printResponse(b)
 }
 func cmdConfig() {
 	b, err := get("/api/config")
@@ -285,10 +329,7 @@ func cmdConfig() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	var pretty map[string]interface{}
-	_ = json.Unmarshal(b, &pretty)
-	out, _ := json.MarshalIndent(pretty, "", "  ")
-	fmt.Println(string(out))
+	printResponse(b)
 }
 
 func cmdHealth() {
@@ -297,7 +338,7 @@ func cmdHealth() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	printJSON(b)
+	printResponse(b)
 }
 
 func cmdVersion() {
@@ -310,8 +351,8 @@ func cmdClients(args []string) {
 
 func cmdAP(args []string) {
 	if len(args) == 0 || args[0] == "status" {
-		fmt.Println("AP status: ")
-		cmdStatus()
+		fmt.Println("AP status:")
+		cmdAPStatus()
 		return
 	}
 
@@ -325,6 +366,51 @@ func cmdAP(args []string) {
 	default:
 		fmt.Println("ap: usage: ap [status|start|stop]")
 	}
+}
+
+func cmdAPStatus() {
+	b, err := get("/api/status")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	var status map[string]interface{}
+	if err := json.Unmarshal(b, &status); err != nil {
+		fmt.Fprintln(os.Stderr, "failed to parse status response:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  service: %v\n", status["service"])
+	fmt.Printf("  version: %v\n", status["version"])
+	if cfg, ok := status["config"].(map[string]interface{}); ok {
+		fmt.Println("  config:")
+		fmt.Printf("    name: %v\n", cfgValue(cfg, []string{"app", "name"}))
+		fmt.Printf("    environment: %v\n", cfgValue(cfg, []string{"app", "environment"}))
+		fmt.Printf("    api_url: %v\n", cfgValue(cfg, []string{"app", "api_url"}))
+		fmt.Printf("    core_url: %v\n", cfgValue(cfg, []string{"app", "core_url"}))
+		fmt.Printf("    interface: %v\n", cfgValue(cfg, []string{"network", "default_interface"}))
+		fmt.Printf("    portal_ip: %v\n", cfgValue(cfg, []string{"network", "portal_ip"}))
+		fmt.Printf("    dns_ip: %v\n", cfgValue(cfg, []string{"network", "dns_ip"}))
+		fmt.Printf("    captive_portal: %v\n", cfgValue(cfg, []string{"network", "captive_portal"}))
+		fmt.Printf("    active_profile: %v\n", cfgValue(cfg, []string{"active_profile"}))
+	}
+	if plugins, ok := status["plugins"].([]interface{}); ok {
+		fmt.Printf("  plugins: %d enabled\n", len(plugins))
+	}
+}
+
+func cfgValue(cfg map[string]interface{}, path []string) interface{} {
+	current := interface{}(cfg)
+	for _, key := range path {
+		if m, ok := current.(map[string]interface{}); ok {
+			current = m[key]
+		} else {
+			return "<missing>"
+		}
+	}
+	if current == nil {
+		return "<missing>"
+	}
+	return current
 }
 
 func cmdStart(args []string) {
@@ -539,7 +625,7 @@ func cmdProfiles(args []string) {
 		}
 		var profiles []map[string]interface{}
 		if err := json.Unmarshal(b, &profiles); err != nil {
-			printJSON(b)
+			printResponse(b)
 			return
 		}
 		rows := [][]string{}
@@ -569,7 +655,7 @@ func cmdProfiles(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	case "create":
 		if len(args) != 7 {
 			fmt.Println("profiles: usage: profiles create <name> <ssid> <password> <channel> <mode> <dhcp>")
@@ -592,7 +678,7 @@ func cmdProfiles(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	case "update":
 		if len(args) != 7 {
 			fmt.Println("profiles: usage: profiles update <name> <ssid> <password> <channel> <mode> <dhcp>")
@@ -615,7 +701,7 @@ func cmdProfiles(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	case "delete":
 		if len(args) != 2 {
 			fmt.Println("profiles: usage: profiles delete <name>")
@@ -627,7 +713,7 @@ func cmdProfiles(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	default:
 		fmt.Println("profiles: usage: profiles [list] | select <name> | create <name> <ssid> <password> <channel> <mode> <dhcp> | update <name> <ssid> <password> <channel> <mode> <dhcp> | delete <name>")
 	}
@@ -642,7 +728,7 @@ func cmdPlugins(args []string) {
 		}
 		var plugins []map[string]interface{}
 		if err := json.Unmarshal(b, &plugins); err != nil {
-			printJSON(b)
+			printResponse(b)
 			return
 		}
 		rows := [][]string{}
@@ -676,7 +762,7 @@ func cmdPlugins(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 		return
 	case "start":
 		if len(args) < 3 {
@@ -697,7 +783,7 @@ func cmdPlugins(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 		return
 	case "stop":
 		if len(args) != 2 {
@@ -716,7 +802,7 @@ func cmdPlugins(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 		return
 	default:
 		fmt.Println("plugins: usage: plugins [list] | toggle <name> <on|off> | start <name> <cmd> [args...] | stop <name>")
@@ -732,7 +818,7 @@ func cmdInterfaces(args []string) {
 		}
 		var interfaces []map[string]interface{}
 		if err := json.Unmarshal(b, &interfaces); err != nil {
-			printJSON(b)
+			printResponse(b)
 			return
 		}
 		rows := [][]string{}
@@ -763,10 +849,7 @@ func cmdRecon(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	var pretty interface{}
-	_ = json.Unmarshal(b, &pretty)
-	out, _ := json.MarshalIndent(pretty, "", "  ")
-	fmt.Println(string(out))
+	printResponse(b)
 }
 
 func cmdPortal(args []string) {
@@ -778,7 +861,7 @@ func cmdPortal(args []string) {
 		}
 		var status map[string]interface{}
 		if err := json.Unmarshal(b, &status); err != nil {
-			printJSON(b)
+			printResponse(b)
 			return
 		}
 		for key, value := range status {
@@ -794,7 +877,7 @@ func cmdPortal(args []string) {
 		}
 		var creds []map[string]interface{}
 		if err := json.Unmarshal(b, &creds); err != nil {
-			printJSON(b)
+			printResponse(b)
 			return
 		}
 		rows := [][]string{}
@@ -815,7 +898,7 @@ func cmdPortal(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 		return
 	}
 	if args[0] == "stop" {
@@ -824,7 +907,7 @@ func cmdPortal(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 		return
 	}
 	fmt.Println("portal: usage: portal [status|credentials|start|stop]")
@@ -842,7 +925,7 @@ func cmdSystem(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(string(b))
+	printResponse(b)
 }
 
 func cmdFirewall(args []string) {
@@ -866,7 +949,7 @@ func cmdFirewall(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	case "clear":
 		iface := "wlan0"
 		if len(args) >= 2 {
@@ -878,7 +961,7 @@ func cmdFirewall(args []string) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(string(b))
+		printResponse(b)
 	default:
 		fmt.Println("firewall: usage: firewall apply [iface] [portal_ip] | clear [iface]")
 	}
@@ -902,7 +985,7 @@ func cmdInterface(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(string(b))
+	printResponse(b)
 }
 
 func cmdTemplates(args []string) {
@@ -1104,6 +1187,12 @@ func main() {
 		apiBase = envURL
 	}
 	dockerMode = dockerFlag || (isDockerComposeAvailable() && os.Getenv("AP1_USE_DOCKER") == "1")
+
+	if os.Geteuid() != 0 {
+		fmt.Fprintln(os.Stderr, "ERROR: AP1 CLI must be run as root.")
+		fmt.Fprintln(os.Stderr, "Please run with sudo: sudo ap1-cli <command>")
+		os.Exit(1)
+	}
 
 	if flag.NArg() == 0 {
 		usage()

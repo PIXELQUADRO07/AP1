@@ -1,9 +1,9 @@
 //! Improvements notes and feature flags
 
 pub fn reduce_external_deps() {
-    println!("riduzione delle dipendenze esterne: usare solo i binari di sistema quando possibile");
+    println!("reducing external dependencies: use only system binaries when possible");
 }
 
 pub fn scalability_measures() {
-    println!("misure di scalabilità: suddividi carichi in componenti separati e usa un event bus leggero");
+    println!("scalability measures: split workloads into separate components and use a lightweight event bus");
 }

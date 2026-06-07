@@ -1,4 +1,4 @@
-//! Orchestrator module - avvia/arresta moduli
+//! Orchestrator module - start/stop modules
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};

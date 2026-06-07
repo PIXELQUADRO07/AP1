@@ -1,6 +1,6 @@
 //! System control module.
 //!
-//! Wrapper per comandi di sistema e gestione dei servizi di rete.
+//! Wrapper for system commands and network service management.
 
 use std::fs;
 use std::path::Path;
@@ -29,7 +29,7 @@ pub fn command_available(cmd: &str) -> bool {
 
 pub fn run_service_action(service: &str, action: &str) -> Result<String, String> {
     if !["start", "stop", "restart", "status"].contains(&action) {
-        return Err("azione non supportata".into());
+        return Err("action not supported".into());
     }
 
     if command_available("systemctl") {
@@ -39,7 +39,7 @@ pub fn run_service_action(service: &str, action: &str) -> Result<String, String>
         return run_command("service", &[service, action]);
     }
 
-    Err("service manager non disponibile".into())
+    Err("service manager unavailable".into())
 }
 
 pub fn configure_interface(iface: &str, ip: &str, subnet: &str) -> Result<(), String> {
@@ -121,7 +121,7 @@ pub fn write_profile_configs(hostapd_conf: &str, dnsmasq_conf: &str, runtime_dir
 }
 
 pub fn restart_system_services() {
-    println!("Riavvio servizi di sistema AP1");
+    println!("Restarting AP1 system services");
 
     match run_service_action("hostapd", "restart") {
         Ok(o) => println!("hostapd restarted: {}", o.trim()),

@@ -1,4 +1,3 @@
 # System Network
 
-Questo directory contiene i wrapper della rete per AP1.
-Include servizi di gestione interfacce, configurazione IP e integrazione OS.
+This directory contains AP1 network wrappers. It includes interface management services, IP configuration, and OS integration.

@@ -1,33 +1,33 @@
-# Confronto tra AP1 e WiFi-Pumpkin3
+# AP1 vs WiFi-Pumpkin3
 
-## WiFi-Pumpkin3 (repo ufficiale)
+## WiFi-Pumpkin3 (official repo)
 
-Stack principale:
+Primary stack:
 - Python 3.8+
-- Package `wifipumpkin3`
-- `config/` con template captive portal, hostapd, dnsmasq, ecc.
-- `setup.py` e `requirements.txt`
-- Plugin e moduli Python interni
-- `Dockerfile` per deploy container
-- Interfaccia CLI con script `wp3`, `captiveflask`, `phishkin3`, `evilqr3`, `sslstrip3`
+- `wifipumpkin3` package
+- `config/` with captive portal, hostapd, dnsmasq templates
+- `setup.py` and `requirements.txt`
+- internal Python plugins and modules
+- `Dockerfile` for container deployment
+- CLI scripts like `wp3`, `captiveflask`, `phishkin3`, `evilqr3`, `sslstrip3`
 
-Struttura rilevata:
+Detected structure:
 - `.github/`
 - `config/`
 - `wifipumpkin3/`
 - `README.md`, `LICENSE.md`, `CHANGELOG.md`
 
-## AP1 (progetto corrente)
+## AP1 (current project)
 
-Stack principale:
-- Core engine in Rust
-- API server in Go
-- Interfaccia CLI nativa
-- Sistema plugin con supporto Rust/WASM
-- Wrapper OS per hostapd, dnsmasq, firewall, process management
-- Containerizzazione Docker con Docker Compose
+Primary stack:
+- Rust core engine
+- Go API server
+- native CLI
+- plugin system with Rust/WASM support
+- OS wrappers for hostapd, dnsmasq, firewall, and process management
+- Docker containerization with Docker Compose
 
-Struttura rilevata:
+Detected structure:
 - `core/`
   - `src/main.rs`
   - `src/ap_manager/`
@@ -60,14 +60,14 @@ Struttura rilevata:
   - `docker-compose.yml`
   - `scripts/`
 
-## Differenze chiave
+## Key differences
 
-- AP1 è una riscrittura architetturale completa, non un fork diretto.
-- La struttura è più modulare e separa core, API e CLI in servizi distinti.
-- AP1 usa Rust/Go invece di Python puro.
-- L'approccio di configurazione è basato su YAML e servizi containerizzati.
+- AP1 is a ground-up architectural rewrite, not a direct fork.
+- The structure separates core, API, and CLI into distinct services.
+- AP1 uses Rust/Go instead of pure Python.
+- Configuration is YAML-based with service and container support.
 
-## Stato corrente
+## Current status
 
-- Il core Rust è compilabile e ora include i moduli `ap_manager`, `traffic_engine`, `proxy`, `system_control`, `utils` nel percorso `core/src/`.
-- Il progetto AP1 ha tutti i blocchi di struttura richiesti presenti nel repository.
+- The Rust core is buildable and includes modules such as `ap_manager`, `traffic_engine`, `proxy`, `system_control`, and `utils`.
+- The AP1 repository contains the expected structural components.

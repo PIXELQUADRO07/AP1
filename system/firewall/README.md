@@ -1,5 +1,5 @@
 # Firewall Wrapper
 
-Questo pacchetto contiene helper per generare e applicare regole firewall tramite nftables/iptables.
+This package contains helpers to generate and apply firewall rules using nftables/iptables.
 
-In futuro qui sarà aggiunta l'integrazione con il sistema OS.
+In the future, OS-level integration will be added here.

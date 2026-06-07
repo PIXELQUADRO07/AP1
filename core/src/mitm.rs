@@ -5,7 +5,7 @@ use std::process::Command;
 
 pub fn sniff_traffic(iface: &str) {
     let iface = if iface.is_empty() { "wlan0" } else { iface };
-    println!("Avvio packet capture su {}", iface);
+    println!("Starting packet capture on {}", iface);
     if let Err(err) = packet_capture::start(iface, "../system/runtime/packet_capture.log") {
         eprintln!("packet capture failed: {}", err);
     } else {
@@ -16,20 +16,20 @@ pub fn sniff_traffic(iface: &str) {
 pub fn start_transparent_proxy(iface: &str) {
     let iface = if iface.is_empty() { "wlan0" } else { iface };
     if Command::new("which").arg("mitmproxy").output().map(|o| o.status.success()).unwrap_or(false) {
-        println!("mitmproxy disponibile su {}: configura il traffico tramite iptables/nftables per reindirizzare su 8080", iface);
+        println!("mitmproxy available on {}: configure traffic via iptables/nftables to redirect to 8080", iface);
     } else {
-        println!("mitmproxy non disponibile, installare mitmproxy per la funzione MITM");
+        println!("mitmproxy not available, install mitmproxy for MITM support");
     }
 }
 
 pub fn stop_transparent_proxy() {
     let _ = Command::new("pkill").arg("-f").arg("mitmproxy").status();
     packet_capture::stop();
-    println!("arresto proxy trasparente e packet capture richiesti");
+    println!("transparent proxy and packet capture stop requested");
 }
 
 pub fn inject_payload() {
-    println!("injection payload placeholder: implementazione di attacco MITM avanzato tramite packet replay o HTTP injection necessaria");
+    println!("injection payload placeholder: advanced MITM attack implementation via packet replay or HTTP injection required");
 }
 
 pub fn get_capture_count() -> u64 {

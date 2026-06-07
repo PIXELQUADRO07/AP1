@@ -34,8 +34,8 @@ function ensure_ap1_installed() {
     if [ "$installed" = "$current" ]; then
       return
     fi
-    echo "Nota: esiste un altro comando 'ap1' in $installed."
-    echo "Installerò comunque un link in ~/.local/bin/ap1 per questa copia."
+    echo "Note: another 'ap1' command already exists in $installed."
+    echo "I will still install a link to ~/.local/bin/ap1 for this copy."
   fi
 
   if [ -w "/usr/local/bin" ] 2>/dev/null; then
@@ -53,10 +53,10 @@ function ensure_ap1_installed() {
     return
   fi
 
-  echo "Non è possibile installare ap1 automaticamente."
-  echo "Crea manualmente un link simbolico in una directory del PATH:"
+  echo "Cannot install ap1 automatically."
+  echo "Create a symlink manually in a PATH directory:"
   echo "  ln -s \"$SCRIPT_PATH\" /usr/local/bin/ap1"
-  echo "oppure"
+  echo "or"
   echo "  ln -s \"$SCRIPT_PATH\" \"\$HOME/.local/bin/ap1\""
 }
 
@@ -86,28 +86,28 @@ case "${1:-}" in
   install)
     ensure_ap1_installed
     if ! command -v cargo >/dev/null 2>&1; then
-      echo "Errore: cargo non trovato. Installa Rust prima di proseguire."
+      echo "Error: cargo not found. Install Rust before continuing."
       exit 1
     fi
     if ! command -v go >/dev/null 2>&1; then
-      echo "Errore: go non trovato. Installa Go prima di proseguire."
+      echo "Error: go not found. Install Go before continuing."
       exit 1
     fi
     mkdir -p "$ROOT_DIR/bin"
     echo "[1/3] Build CLI..."
     cd "$ROOT_DIR/cli"
     go build -o "$ROOT_DIR/bin/ap1-cli"
-    echo "AP1 launcher pronto. Usa 'ap1' da qualsiasi directory se il link è stato installato correttamente."
+    echo "AP1 launcher ready. Use 'ap1' from any directory if the symlink was installed correctly."
     exit 0
     ;;
   start|"")
     ensure_ap1_installed
     if ! command -v cargo >/dev/null 2>&1; then
-      echo "Errore: cargo non trovato. Installa Rust prima di proseguire."
+      echo "Error: cargo not found. Install Rust before continuing."
       exit 1
     fi
     if ! command -v go >/dev/null 2>&1; then
-      echo "Errore: go non trovato. Installa Go prima di proseguire."
+      echo "Error: go not found. Install Go before continuing."
       exit 1
     fi
     mkdir -p "$ROOT_DIR/bin"

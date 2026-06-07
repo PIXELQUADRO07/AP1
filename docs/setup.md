@@ -1,97 +1,96 @@
 # Setup AP1
 
-## Prerequisiti
+## Prerequisites
 
 - Rust 1.71+
 - Go 1.21+
-- Docker (opzionale per deploy)
+- Docker (optional)
 
-## Avvio del core
+## Start the core
 
 ```bash
 cd core
 cargo run
 ```
 
-Se vuoi passare percorsi di config espliciti:
+If you want to pass explicit config paths:
 
 ```bash
 AP1_CONFIG_PATH=../config/global.yaml AP1_PLUGIN_CONFIG_PATH=../config/plugins.yaml cargo run
 ```
 
-## Avvio dell'API
+## Start the API
 
 ```bash
 cd api
 go run .
 ```
 
-Puoi anche usare flag o variabili d'ambiente:
+You can also use flags or environment variables:
 
 ```bash
 go run . -config ../config/global.yaml -plugins ../config/plugins.yaml -addr :8080
 ```
 
-## Avvio della CLI
+## Start the CLI
 
 ```bash
 cd cli
 go run . --help
 ```
 
-## Setup completo
+## Full setup
 
-Esegui il bootstrap da root:
+Run the bootstrap script:
 
 ```bash
 ./install.sh
 ```
 
-## Avvio rapido con un solo comando
+## Quick start with a single command
 
-Dalla root del progetto puoi avviare core e API in background e aprire la CLI con:
+From the project root you can start the core and API in the background and open the CLI with:
 
 ```bash
 ./ap1
 ```
 
-La prima volta il comando cercherà di installare automaticamente `ap1` in una directory del PATH (`/usr/local/bin` o `~/.local/bin`).
+The first time it will try to install `ap1` into a PATH directory (`/usr/local/bin` or `~/.local/bin`).
 
-Oppure in modo esplicito:
+Or explicitly:
 
 ```bash
 ./ap1 start
 ```
 
-## API disponibili
+## Available API routes
 
-- `GET /health` - stato del server API
-- `GET /api/status` - stato del core e configurazione
-- `GET /api/config` - configurazione globale in JSON
-- `GET /api/profiles` - lista dei profili AP definiti
-- `POST /api/profiles/select` - seleziona il profilo AP attivo e applica la configurazione
-- `GET /api/plugins` - lista i plugin disponibili
-- `POST /api/plugins/toggle` - abilita/disabilita un plugin
-- `POST /api/system/hostapd/<action>` - controlla hostapd
-- `POST /api/system/dnsmasq/<action>` - controlla dnsmasq
+- `GET /health` - API server health
+- `GET /api/status` - core status and configuration
+- `GET /api/config` - global config JSON
+- `GET /api/profiles` - AP profiles list
+- `POST /api/profiles/select` - select the active AP profile and apply runtime config
+- `GET /api/plugins` - available plugins
+- `POST /api/plugins/toggle` - enable/disable a plugin
+- `POST /api/system/hostapd/<action>` - control hostapd
+- `POST /api/system/dnsmasq/<action>` - control dnsmasq
 
-## Configurazione
+## Configuration
 
-Modifica `config/global.yaml` per cambiare API, core e parametri di rete.
+Edit `config/global.yaml` to change API, core, and networking options.
 
-## Import templates da un repository di template
+## Import templates from another template repo
 
-Se hai una copia locale di un repository di template compatibile con il formato di AP1,
-puoi importare le cartelle `config/templates` eseguendo dalla root del progetto:
+If you have a local copy of a compatible template repository, you can import `config/templates` from the project root:
 
 ```bash
 make import-templates
-# oppure
+# or
 sh docker/scripts/import_templates.sh /path/to/source/config/templates $(pwd)/config/templates
 ```
 
-Questo copierà i template nel percorso `config/templates` del progetto AP1.
+This copies templates into the project `config/templates` folder.
 
-## Note aggiuntive
+## Additional notes
 
-Puoi consultare anche `docs/api.md` per la documentazione dei percorsi API.
+See `docs/api.md` for API route documentation.

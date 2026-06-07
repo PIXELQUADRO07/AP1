@@ -11,7 +11,7 @@ fn index_page() -> String {
 <body>
 <h1>AP1 Web UI</h1>
 <ul>
-<li><a href='/status'>Stato core</a></li>
+<li><a href='/status'>Core status</a></li>
 <li><a href='http://127.0.0.1:8080'>Captive Portal</a></li>
 </ul>
 </body>
@@ -29,7 +29,7 @@ pub fn start_webui() {
     match listener {
         Ok(listener) => {
             thread::spawn(move || {
-                println!("Web UI avviato su http://127.0.0.1:8082");
+                println!("Web UI started at http://127.0.0.1:8082");
                 for stream in listener.incoming() {
                     if let Ok(mut stream) = stream {
                         let mut buffer = [0; 1024];
@@ -46,13 +46,13 @@ pub fn start_webui() {
             });
         }
         Err(err) => {
-            eprintln!("impossibile avviare Web UI: {}", err);
+            eprintln!("failed to start Web UI: {}", err);
         }
     }
 }
 
 pub fn stop_webui() {
-    println!("Web UI stop richiesto (non supportato nel demo corrente)");
+    println!("Web UI stop requested (not supported in current demo)");
 }
 
 pub fn ui_status() {

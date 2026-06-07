@@ -2,7 +2,7 @@ package firewall
 
 import "strings"
 
-// Questo package fornisce helper per generare regole firewall.
+// This package provides helpers to generate firewall rules.
 
 type FirewallRule struct {
     Chain string

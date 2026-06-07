@@ -1,15 +1,15 @@
 # Plugin Loader
 
-Questo modulo contiene uno scheletro per il loader dei plugin AP1.
+This module contains a skeleton for the AP1 plugin loader.
 
-## Obiettivo
+## Purpose
 
-- caricare plugin Rust da `plugins/core_plugins/`
-- caricare plugin WASM da `plugins/wasm_plugins/`
-- esporre un'interfaccia comune per l'integrazione con il core
+- load Rust plugins from `plugins/core_plugins/`
+- load WASM plugins from `plugins/wasm_plugins/`
+- expose a common interface for integration with the core
 
-## Struttura
+## Structure
 
-- `plugins/core_plugins/` - plugin Rust nativi
-- `plugins/wasm_plugins/` - plugin compilati in WebAssembly
-- `plugins/plugin_loader/loader.rs` - esempi di loader e metadata plugin
+- `plugins/core_plugins/` - native Rust plugins
+- `plugins/wasm_plugins/` - WebAssembly compiled plugins
+- `plugins/plugin_loader/loader.rs` - loader examples and plugin metadata

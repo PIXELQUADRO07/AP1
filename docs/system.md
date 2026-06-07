@@ -1,23 +1,23 @@
 # System Wrappers
 
-AP1 include wrapper per l’integrazione con strumenti di sistema e rete.
+AP1 includes wrappers for interacting with operating system and network tools.
 
-## Cartelle principali
+## Main folders
 
-- `system/network/` - gestione interfacce e configurazione IP
-- `system/firewall/` - generazione regole firewall
-- `system/process_manager/` - esecuzione e monitoraggio processi esterni
-- `system/services/` - wrapper per hostapd, dnsmasq e altri servizi di rete
+- `system/network/` - interface management and IP configuration
+- `system/firewall/` - firewall rule generation
+- `system/process_manager/` - external process execution and monitoring
+- `system/services/` - wrappers for hostapd, dnsmasq, and other network services
 
-## Obiettivi
+## Goals
 
-- centralizzare l’interazione con strumenti di sistema come `systemctl` o `service`
-- generare file runtime per `hostapd` e `dnsmasq`
-- mantenere un layer separato dalla logica API e core
+- centralize interaction with system tools like `systemctl` or `service`
+- generate runtime files for `hostapd` and `dnsmasq`
+- keep system integration separate from API and core logic
 
-## Integrazione
+## Integration
 
-L’API server può usare questi wrapper per:
-- creare e applicare file di configurazione
-- avviare/fermare servizi di rete
-- estrarre informazioni dallo stato di sistema
+The API server can use these wrappers to:
+- create and apply configuration files
+- start/stop network services
+- query system state

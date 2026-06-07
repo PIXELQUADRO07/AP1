@@ -1,5 +1,5 @@
 # System Wrappers
 
-Questa cartella contiene i wrapper di sistema di AP1 per gestire interfacce, firewall e processi.
+This folder contains AP1 system wrappers for managing interfaces, firewall rules, and processes.
 
-Le implementazioni qui sono di esempio e mostrano come organizzare il codice di integrazione OS.
+The implementations here are examples and show how to organize OS integration code.

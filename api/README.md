@@ -1,3 +1,3 @@
 # API Server
 
-Server Go che espone le REST API, gestisce sessioni e coordina il core Rust.
+Go server exposing REST APIs, managing sessions, and coordinating the Rust core.

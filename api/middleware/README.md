@@ -1,3 +1,3 @@
 # API Middleware
 
-Middleware per AP1 API, ad esempio autenticazione, logging, rate limiting e controllo degli header.
+Middleware for AP1 API, such as authentication, logging, rate limiting, and header control.

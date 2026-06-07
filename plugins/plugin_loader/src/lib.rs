@@ -1,6 +1,6 @@
 //! AP1 Plugin Loader
 //!
-//! Questo crate fornisce la scoperta e il caricamento dei plugin basati sulla configurazione YAML.
+//! This crate provides discovery and loading of plugins based on YAML configuration.
 
 pub mod loader;
 

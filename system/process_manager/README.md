@@ -1,5 +1,5 @@
 # Process Manager
 
-Questo package gestisce l'esecuzione di comandi e servizi di sistema.
+This package manages execution of commands and system services.
 
-Include le primitive per avviare, fermare e interrogare processi esterni.
+It includes primitives for starting, stopping, and querying external processes.

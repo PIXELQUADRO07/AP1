@@ -1,84 +1,84 @@
 # AP1
 
-AP1 è un orchestratore modulare per captive portal e gestione AP, basato su core Rust, API Go e una CLI nativa.
+AP1 is a modular orchestrator for captive portals and AP management, built with a Rust core, Go API, and native CLI.
 
-Struttura iniziale:
+Repo structure:
 
-- `core/` - engine principale in Rust con runtime captive portal, packet capture C++/FFI e plugin management
-- `api/` - server API in Go
-- `cli/` - client da riga di comando per gestire profili, plugin e servizi
-- `plugins/` - sistema plugin Rust/WASM
-- `system/` - wrapper OS e integrazioni di rete
-- `config/` - configurazioni YAML/TOML
-- `docker/` - containerizzazione e script di deploy
-- `docs/` - documentazione di architettura e setup
+- `core/` - primary engine in Rust with captive portal runtime, packet capture, and plugin management
+- `api/` - Go API server
+- `cli/` - command-line client for managing profiles, plugins, and services
+- `plugins/` - plugin system with Rust/WASM support
+- `system/` - OS wrappers and network integrations
+- `config/` - YAML configuration and portal templates
+- `docker/` - containerization and deployment scripts
+- `docs/` - architecture and setup documentation
 
-## Passi successivi consigliati
+## Recommended steps
 
-1. Avviare il core Rust:
+1. Start the Rust core:
    ```bash
    cd core
    cargo run
    ```
-   Oppure impostare percorsi di configurazione personalizzati:
+   Or use explicit config paths:
    ```bash
    AP1_CONFIG_PATH=../config/global.yaml AP1_PLUGIN_CONFIG_PATH=../config/plugins.yaml cargo run
    ```
-2. Avviare l'API server Go:
+2. Start the Go API server:
    ```bash
    cd ../api
    go run .
    ```
-   Oppure passare i percorsi con flag:
+   Or pass flags:
    ```bash
    go run . -config ../config/global.yaml -plugins ../config/plugins.yaml -addr :8080
    ```
-3. Avviare la CLI AP1:
+3. Start the AP1 CLI:
    ```bash
    cd cli
    go run . --help
    ```
-4. Oppure utilizzare il Makefile:
+4. Or use the Makefile:
    ```bash
    make core
    make api
    ```
-5. Per installare le dipendenze e verificare il progetto:
+5. To install dependencies and bootstrap the project:
    ```bash
    ./install.sh
    ```
-6. Per avviare tutti i componenti dalla root con un singolo comando e aprire la CLI interattiva:
+6. To start all components from the repo root with one command and open the interactive CLI:
    ```bash
    ./ap1
    ```
-   La prima volta cercherà di installare automaticamente `ap1` nel tuo PATH, così potrai poi eseguirlo da qualsiasi directory.
-   Oppure, per un avvio esplicito:
+   On first run, the command attempts to install `ap1` into your PATH so you can run it from any directory.
+   Alternatively:
    ```bash
    ./ap1 start
    ```
 
-## Endpoint disponibili
+## Available endpoints
 
-- `GET /health` - stato server API
-- `GET /api/status` - stato del core e configurazione
-- `GET /api/config` - configurazione globale in JSON
-- `GET /api/profiles` - lista dei profili AP definiti
-- `POST /api/profiles/select` - seleziona e applica il profilo AP attivo, generando configurazioni `hostapd`/`dnsmasq`
-- `GET /api/plugins` - lista i plugin disponibili
-- `POST /api/plugins/toggle` - abilita o disabilita un plugin
-- `POST /api/plugins/start` - avvia un plugin esterno con nome e comando
-- `POST /api/plugins/stop` - interrompe un plugin avviato in background
-- `GET /api/interfaces` - elenco delle interfacce di rete del sistema
-- `GET /api/recon/networks?iface=<iface>` - scansione reti Wi-Fi su un'interfaccia
-- `GET /api/portal/status` - stato del captive portal
-- `GET /api/portal/credentials` - elenco credenziali catturate dal portal
-- `POST /api/system/hostapd/<action>` - gestisce hostapd (`start`, `stop`, `restart`, `status`)
-- `POST /api/system/dnsmasq/<action>` - gestisce dnsmasq (`start`, `stop`, `restart`, `status`)
-- `POST /api/system/firewall/apply` - applica regole captive portal su un'interfaccia
-- `POST /api/system/firewall/clear` - cancella le regole firewall del captive portal
-- `POST /api/system/interface/configure` - assegna IP/subnet a un'interfaccia
-- `GET /status` - stato del core
+- `GET /health` - API server health
+- `GET /api/status` - core status and configuration
+- `GET /api/config` - global configuration JSON
+- `GET /api/profiles` - AP profile list
+- `POST /api/profiles/select` - select active AP profile and apply runtime config for `hostapd`/`dnsmasq`
+- `GET /api/plugins` - available plugins
+- `POST /api/plugins/toggle` - enable or disable a plugin
+- `POST /api/plugins/start` - start an external plugin
+- `POST /api/plugins/stop` - stop a running plugin
+- `GET /api/interfaces` - local network interfaces
+- `GET /api/recon/networks?iface=<iface>` - Wi-Fi scan on an interface
+- `GET /api/portal/status` - captive portal status
+- `GET /api/portal/credentials` - captured portal credentials
+- `POST /api/system/hostapd/<action>` - manage hostapd
+- `POST /api/system/dnsmasq/<action>` - manage dnsmasq
+- `POST /api/system/firewall/apply` - apply captive portal firewall rules
+- `POST /api/system/firewall/clear` - clear firewall rules
+- `POST /api/system/interface/configure` - assign IP/subnet to an interface
+- `GET /status` - core status
 
-## Stato attuale
+## Current status
 
-Questa base MVP include una CLI che gestisce il server API e il core Rust, con supporto profili AP, plugin e controllo servizio `hostapd`/`dnsmasq`.
+This MVP includes a CLI that manages the API server and Rust core, with AP profile support, plugin control, and hostapd/dnsmasq service management.

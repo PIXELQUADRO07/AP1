@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var ErrServiceManagerUnavailable = errors.New("service manager non disponibile")
+var ErrServiceManagerUnavailable = errors.New("service manager unavailable")
 
 func runCommand(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
@@ -25,7 +25,7 @@ func runCommand(name string, args ...string) (string, error) {
 
 func RunServiceAction(service, action string) (string, error) {
 	if action != "start" && action != "stop" && action != "restart" && action != "status" {
-		return "", errors.New("azione non supportata")
+		return "", errors.New("action not supported")
 	}
 
 	if path, err := exec.LookPath("systemctl"); err == nil {

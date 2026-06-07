@@ -67,7 +67,7 @@ func GenerateDnsmasqConfig(profile *services.Profile, iface string) string {
 
 func ApplyProfileConfig(profile *services.Profile, iface, runtimeDir string) (string, error) {
 	if profile == nil {
-		return "", errors.New("profilo non valido")
+		return "", errors.New("invalid profile")
 	}
 	if iface == "" {
 		iface = "wlan0"
@@ -101,7 +101,7 @@ func ApplyProfileConfig(profile *services.Profile, iface, runtimeDir string) (st
 	hostapdOutput, hostapdErr := RunServiceAction("hostapd", "restart")
 	if hostapdErr != nil {
 		if errors.Is(hostapdErr, ErrServiceManagerUnavailable) {
-			messages = append(messages, "service manager non disponibile, configurazione hostapd salvata")
+			messages = append(messages, "service manager unavailable, hostapd configuration saved")
 		} else {
 			messages = append(messages, fmt.Sprintf("hostapd restart warning: %v", hostapdErr))
 		}
@@ -112,7 +112,7 @@ func ApplyProfileConfig(profile *services.Profile, iface, runtimeDir string) (st
 	dnsmasqOutput, dnsmasqErr := RunServiceAction("dnsmasq", "restart")
 	if dnsmasqErr != nil {
 		if errors.Is(dnsmasqErr, ErrServiceManagerUnavailable) {
-			messages = append(messages, "service manager non disponibile, configurazione dnsmasq salvata")
+			messages = append(messages, "service manager unavailable, dnsmasq configuration saved")
 		} else {
 			messages = append(messages, fmt.Sprintf("dnsmasq restart warning: %v", dnsmasqErr))
 		}

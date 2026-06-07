@@ -3,24 +3,24 @@
 ## Endpoints
 
 ### `GET /`
-Messaggio base di salute dell'API.
+A simple health message from the API.
 
 ### `GET /health`
-Verifica se il server API è attivo.
+Checks whether the API server is running.
 
 ### `GET /api/status`
-Proxy verso il core Rust. Restituisce lo stato del core e la configurazione caricata.
+Proxies to the Rust core and returns core status plus loaded configuration.
 
 ### `GET /api/config`
-Restituisce la configurazione globale `config/global.yaml` in formato JSON.
+Returns the global configuration from `config/global.yaml` as JSON.
 
 ### `GET /api/profiles`
-Restituisce la lista dei profili AP definiti in `config/global.yaml`.
+Returns the list of AP profiles defined in `config/global.yaml`.
 
 ### `POST /api/profiles/select`
-Seleziona il profilo AP attivo e applica la configurazione runtime per `hostapd` e `dnsmasq`.
+Selects the active AP profile and applies runtime configuration for `hostapd` and `dnsmasq`.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -28,7 +28,7 @@ Richiesta JSON:
 }
 ```
 
-Risposta JSON:
+Response JSON:
 
 ```json
 {
@@ -38,9 +38,9 @@ Risposta JSON:
 ```
 
 ### `POST /api/profiles/create`
-Crea un nuovo profilo AP e salva la configurazione.
+Creates a new AP profile and saves configuration.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -54,9 +54,9 @@ Richiesta JSON:
 ```
 
 ### `PUT /api/profiles/update`
-Aggiorna un profilo AP esistente.
+Updates an existing AP profile.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -70,9 +70,9 @@ Richiesta JSON:
 ```
 
 ### `DELETE /api/profiles/delete`
-Elimina un profilo AP.
+Deletes an AP profile.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -81,12 +81,12 @@ Richiesta JSON:
 ```
 
 ### `GET /api/plugins`
-Restituisce la lista dei plugin disponibili.
+Returns the list of available plugins.
 
 ### `POST /api/plugins/toggle`
-Abilita o disabilita un plugin.
+Enables or disables a plugin.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -95,21 +95,10 @@ Richiesta JSON:
 }
 ```
 
-Risposta JSON:
-
-```json
-{
-  "name": "default-logger",
-  "type": "core",
-  "enabled": true,
-  "description": "Basic runtime logger for AP1 core events"
-}
-```
-
 ### `POST /api/plugins/start`
-Avvia un plugin esterno in background.
+Starts an external plugin in the background.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -120,9 +109,9 @@ Richiesta JSON:
 ```
 
 ### `POST /api/plugins/stop`
-Interrompe il plugin eseguito in background.
+Stops a running plugin.
 
-Richiesta JSON:
+Request JSON:
 
 ```json
 {
@@ -131,29 +120,29 @@ Richiesta JSON:
 ```
 
 ### `GET /api/interfaces`
-Restituisce l'elenco delle interfacce di rete locali.
+Returns the list of local network interfaces.
 
 ### `GET /api/recon/networks`
-Esegue la scansione Wi-Fi sull'interfaccia specificata.
+Performs a Wi-Fi scan on the specified interface.
 
 Query string:
 
-- `iface` (opzionale, default: `wlan0`)
+- `iface` (optional, default: `wlan0`)
 
 ### `GET /api/portal/credentials`
-Restituisce le credenziali catturate dal captive portal.
+Returns credentials captured by the captive portal.
 
 ### `POST /api/system/<service>/<action>`
-Controlla i servizi di sistema supportati, ad esempio `hostapd` e `dnsmasq`.
+Controls supported system services such as `hostapd` and `dnsmasq`.
 
-`action` può essere `start`, `stop`, `restart` o `status`.
+`action` can be `start`, `stop`, `restart`, or `status`.
 
-## Utilizzo
+## Usage
 
-- Avvia il core con `cd core && cargo run`
-- Avvia l'API con `cd api && go run .`
-- Avvia la CLI con `cd cli && go run . --help`
+- Start the core with `cd core && cargo run`
+- Start the API with `cd api && go run .`
+- Start the CLI with `cd cli && go run . --help`
 
-## Note
+## Notes
 
-La configurazione caricata dall'API viene letta da `../config/global.yaml`.
+The API reads configuration from `../config/global.yaml`.

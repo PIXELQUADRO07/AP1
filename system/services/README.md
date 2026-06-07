@@ -1,3 +1,3 @@
 # System Services
 
-Questo pacchetto fornisce wrapper per la gestione dei servizi di sistema, come hostapd, dnsmasq e altri moduli di networking.
+This package provides wrappers for managing system services such as hostapd, dnsmasq, and other networking modules.

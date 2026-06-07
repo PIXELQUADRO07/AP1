@@ -1,8 +1,8 @@
 # Docker Deployment
 
-Contiene Dockerfile e script per costruire e avviare i container core e API di AP1.
+Contains Dockerfiles and scripts to build and run AP1 core and API containers.
 
-Usa:
+Usage:
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
