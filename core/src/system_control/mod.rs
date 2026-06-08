@@ -63,16 +63,36 @@ pub fn apply_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> 
 
     fs::write("/proc/sys/net/ipv4/ip_forward", "1").map_err(|e| format!("failed to enable ip_forward: {}", e))?;
 
+    // Find the real internet interface (WAN)
+    let wan_iface = run_command("sh", &["-c", "ip route | grep default | grep -v " + iface + " | awk '{print $5}' | head -n 1"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
     let dest_80 = format!("{}:80", portal_ip);
     let dest_443 = format!("{}:80", portal_ip);
     let dest_53 = format!("{}:53", portal_ip);
 
-    let rules: Vec<Vec<&str>> = vec![
-        vec!["-t", "nat", "-A", "POSTROUTING", "-o", iface, "-j", "MASQUERADE"],
-        vec!["-t", "nat", "-A", "PREROUTING", "-i", iface, "-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", &dest_80],
-        vec!["-t", "nat", "-A", "PREROUTING", "-i", iface, "-p", "tcp", "--dport", "443", "-j", "DNAT", "--to-destination", &dest_443],
-        vec!["-t", "nat", "-A", "PREROUTING", "-i", iface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", &dest_53],
+    // Clean up old rules by flushing our custom chains if they exist, or creating them
+    let _ = run_command("iptables", &["-t", "nat", "-F", "AP1_NAT"]);
+    let _ = run_command("iptables", &["-t", "nat", "-X", "AP1_NAT"]);
+    let _ = run_command("iptables", &["-t", "nat", "-N", "AP1_NAT"]);
+
+    // Jump to our chain from PREROUTING
+    let _ = run_command("iptables", &["-t", "nat", "-D", "PREROUTING", "-j", "AP1_NAT"]);
+    let _ = run_command("iptables", &["-t", "nat", "-I", "PREROUTING", "1", "-j", "AP1_NAT"]);
+
+    let mut rules: Vec<Vec<&str>> = vec![
+        vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", &dest_80],
+        vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "tcp", "--dport", "443", "-j", "DNAT", "--to-destination", &dest_443],
+        vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", &dest_53],
     ];
+
+    if !wan_iface.is_empty() && wan_iface != iface {
+        let _ = run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]);
+        let _ = run_command("iptables", &["-t", "nat", "-I", "POSTROUTING", "1", "-o", &wan_iface, "-j", "MASQUERADE"]);
+        println!("[*] NAT enabled: {} -> {}", iface, wan_iface);
+    }
 
     for rule in rules.iter() {
         let args: Vec<&str> = rule.iter().copied().collect();
@@ -84,26 +104,18 @@ pub fn apply_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> 
     Ok(())
 }
 
-pub fn clear_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> {
-    let iface = if iface.is_empty() { "wlan0" } else { iface };
-    let portal_ip = if portal_ip.is_empty() { "192.168.50.1" } else { portal_ip };
+pub fn clear_firewall_rules(iface: &str, _portal_ip: &str) -> Result<(), String> {
+    let _ = run_command("iptables", &["-t", "nat", "-D", "PREROUTING", "-j", "AP1_NAT"]);
+    let _ = run_command("iptables", &["-t", "nat", "-F", "AP1_NAT"]);
+    let _ = run_command("iptables", &["-t", "nat", "-X", "AP1_NAT"]);
 
-    let dest_80 = format!("{}:80", portal_ip);
-    let dest_443 = format!("{}:80", portal_ip);
-    let dest_53 = format!("{}:53", portal_ip);
+    let wan_iface = run_command("sh", &["-c", "ip route | grep default | grep -v " + iface + " | awk '{print $5}' | head -n 1"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
 
-    let rules: Vec<Vec<&str>> = vec![
-        vec!["-t", "nat", "-D", "POSTROUTING", "-o", iface, "-j", "MASQUERADE"],
-        vec!["-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", &dest_80],
-        vec!["-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "--dport", "443", "-j", "DNAT", "--to-destination", &dest_443],
-        vec!["-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", &dest_53],
-    ];
-
-    for rule in rules.iter() {
-        let args: Vec<&str> = rule.iter().copied().collect();
-        if let Err(e) = run_command("iptables", &args) {
-            eprintln!("warning: failed to clear rule ({}): {}", args.join(" "), e);
-        }
+    if !wan_iface.is_empty() {
+        let _ = run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]);
     }
 
     Ok(())
@@ -132,4 +144,80 @@ pub fn restart_system_services() {
         Ok(o) => println!("dnsmasq restarted: {}", o.trim()),
         Err(e) => eprintln!("dnsmasq restart warning: {}", e),
     }
+}
+
+pub fn prepare_system_for_ap(iface: &str) -> Result<(), String> {
+    println!("Preparing system for Rogue AP on {}", iface);
+
+    // 1. Kill conflicting processes gracefully if possible, then forcefully
+    if command_available("systemctl") {
+        let _ = run_command("systemctl", &["stop", "wpa_supplicant"]);
+        let _ = run_command("systemctl", &["stop", "hostapd"]);
+        let _ = run_command("systemctl", &["stop", "dnsmasq"]);
+    }
+
+    let _ = run_command("pkill", &["-9", "hostapd"]);
+    let _ = run_command("pkill", &["-9", "dnsmasq"]);
+    let _ = run_command("pkill", &["-9", "wpa_supplicant"]);
+
+    // 2. NetworkManager check
+    if command_available("nmcli") {
+        let _ = run_command("nmcli", &["device", "set", iface, "managed", "no"]);
+        println!("NetworkManager: {} set to unmanaged", iface);
+    }
+
+    // 3. RFKill unblock
+    if command_available("rfkill") {
+        let _ = run_command("rfkill", &["unblock", "wifi"]);
+    }
+
+    // 4. Ensure interface is UP
+    let _ = run_command("ip", &["link", "set", iface, "up"]);
+
+    Ok(())
+}
+
+pub fn ensure_monitor_mode(iface: &str) -> Result<String, String> {
+    // If the interface name ends with 'mon', assume it's already monitor
+    if iface.ends_with("mon") {
+        return Ok(iface.to_string());
+    }
+
+    // Check if a monitor interface already exists
+    let output = run_command("iw", &["dev"]);
+    if let Ok(out) = output {
+        if out.contains(&format!("{}mon", iface)) {
+            return Ok(format!("{}mon", iface));
+        }
+    }
+
+    println!("Attempting to create virtual monitor interface for {}", iface);
+
+    // Try to create a virtual monitor interface (supported by many modern drivers)
+    let mon_iface = format!("{}mon", iface);
+    let create_res = run_command("iw", &["dev", iface, "interface", "add", &mon_iface, "type", "monitor"]);
+
+    if create_res.is_ok() {
+        let _ = run_command("ip", &["link", "set", &mon_iface, "up"]);
+        println!("Created virtual monitor interface: {}", mon_iface);
+        return Ok(mon_iface);
+    }
+
+    // Fallback: put the interface itself in monitor mode
+    println!("Virtual interface failed, putting {} in monitor mode directly", iface);
+    let _ = run_command("ip", &["link", "set", iface, "down"]);
+    let _ = run_command("iw", &["dev", iface, "set", "type", "monitor"]);
+    let _ = run_command("ip", &["link", "set", iface, "up"]);
+
+    Ok(iface.to_string())
+}
+
+pub fn restore_system_after_ap(iface: &str) -> Result<(), String> {
+    println!("Restoring system settings for {}", iface);
+
+    if command_available("nmcli") {
+        let _ = run_command("nmcli", &["device", "set", iface, "managed", "yes"]);
+    }
+
+    Ok(())
 }

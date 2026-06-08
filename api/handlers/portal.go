@@ -15,17 +15,28 @@ func PortalCredentialsHandler(ps *server.PortalServer, coreURL string) http.Hand
 			return
 		}
 
-		if coreURL != "" {
-			resp, err := getFromCore(coreURL, "/api/portal/credentials")
-			if err == nil {
-				writeCoreResponse(w, resp)
-				return
+		rows, err := services.DB.Query("SELECT login, password, ip, timestamp FROM credentials ORDER BY timestamp DESC")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to query database: %v", err), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var results []map[string]interface{}
+		for rows.Next() {
+			var login, password, ip, timestamp string
+			if err := rows.Scan(&login, &password, &ip, &timestamp); err == nil {
+				results = append(results, map[string]interface{}{
+					"login":     login,
+					"password":  password,
+					"ip":        ip,
+					"timestamp": timestamp,
+				})
 			}
 		}
 
-		credentials := ps.GetCredentials()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(credentials)
+		_ = json.NewEncoder(w).Encode(results)
 	}
 }
 

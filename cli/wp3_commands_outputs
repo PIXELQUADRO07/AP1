@@ -1,0 +1,289 @@
+
+//stile e grafica della cli di wifipumpkin3// //AP1 deve essere come questo//
+
+┌─[gaetal@parrot]─[~]
+└──╼ $sudo wp3
+
+.,'
+.''.'
+.' .'
+_.ood0Pp._ ,'  `.~ .q?00doo._
+.od00Pd0000Pdb._. . _:db?000b?000bo.
+.?000Pd0000Pd0000PdbMb?0000b?000b?0000b.
+.d0000Pd0000Pd0000Pd0000b?0000b?000b?0000b.
+d0000Pd0000Pd00000Pd0000b?00000b?0000b?000b.
+00000Pd0000Pd0000Pd00000b?00000b?0000b?0000b
+?0000b?0000b?  WiFiPumpkin3  00Pd0000Pd0000P
+?0000b?0000b?0000b?00000Pd00000Pd0000Pd000P
+`?0000b?0000b?0000b?0000Pd0000Pd0000Pd000P'
+`?000b?0000b?000b?0000Pd000Pd0000Pd000P
+`~?00b?000b?000b?000Pd00Pd000Pd00P'
+`~?0b?0b?000b?0Pd0Pd000PdP~'
+codename: Gao
+by: @mh4x0f - P0cL4bs Team | version: 1.1.7 main
+[*] Session id: 6b99eb6e-62be-11f1-8000-bcf10511688b
+wp3 > help
+
+[*] Available Commands:
+=======================
+
+
+Core Commands:
+==============
+
+Command      Description
+-------      -----------
+banner       display an awesome wp3 banner
+exit         exit program and all threads
+help         show this help
+ignore       the message logger will be ignored
+info         get information about proxy/plugin settings
+kill         terminate a module in background by id
+network      show informations about connections
+restore      the message logger will be restored
+search       search modules by name
+set          set variable proxy,plugin and access point
+show         show available modules
+unset        unset variable commnd hostapd_config
+use          select module for modules
+
+Ap Commands:
+============
+
+Command      Description
+-------      -----------
+ap           show all variable and status from AP
+clients      show all connected clients on AP
+dhcpconf     show/choise dhcp server configuration
+dhcpmode     show/set all available dhcp server
+dump         dump informations from client connected on AP
+jobs         show all threads/processes in background
+mode         all wireless mode available
+start        start access point service
+stop         stop access point service
+
+Network Commands:
+=================
+
+Command      Description
+-------      -----------
+plugins      show all available plugins
+proxies      show all available proxies
+
+
+
+
+
+
+.,'
+.''.'
+.' .'
+.    ' . ~,'  `.~ . `    .
+. '  .  '   .`:_. . _:'.   `  .  ` .
+.'   .'     ,     .'^'.    .     `.   `.
+.    .       .A.  .     . .A.       .    .
+.d000b.      .d000b.
+'    '    .d0000000b.  .d0000000b.    `    `
+.    .      .      . db  .     .      .    .
+d00b
+`    `?0o.  `     `     '    '  .o0P'    '
+.    `?00   ooooo.  .ooooo   00P' .   .
+` .   `?00000P ?0bd0P ?00000P' .' . '
+. . `~~   ~~~~  .~~'  . .
+~     - ~~ -    ~
+codename: Gao
+by: @mh4x0f - P0cL4bs Team | version: 1.1.7 main
+[*] Session id: 6b99eb6e-62be-11f1-8000-bcf10511688b
+wp3 > ap
+
+[*] Settings AccessPoint:
+=========================
+
+bssid             | ssid           |   channel | interface   | interface_net   | status      | security   | hostapd_config
+-------------------+----------------+-----------+-------------+-----------------+-------------+------------+------------------
+BC:F6:85:03:36:5B | WiFi Pumpkin 3 |        11 | None        | default         | not Running | false      | false
+
+
+wp3 >
+
+
+
+
+
+
+.,'
+.''.'
+.' .'
+_.ood0Pp._ ,'  `.~ .q?00doo._
+.od00Pd0000Pdb._. . _:db?000b?000bo.
+.?000Pd0000Pd0000PdbMb?0000b?000b?0000b.
+.d0000Pd0000Pd0000Pd0000b?0000b?000b?0000b.
+d0000Pd0000Pd00000Pd0000b?00000b?0000b?000b.
+00000Pd0000Pd0000Pd00000b?00000b?0000b?0000b
+?0000b?0000b?  WiFiPumpkin3  00Pd0000Pd0000P
+?0000b?0000b?0000b?00000Pd00000Pd0000Pd000P
+`?0000b?0000b?0000b?0000Pd0000Pd0000Pd000P'
+`?000b?0000b?000b?0000Pd000Pd0000Pd000P
+`~?00b?000b?000b?000Pd00Pd000Pd00P'
+`~?0b?0b?000b?0Pd0Pd000PdP~'
+codename: Gao
+by: @mh4x0f - P0cL4bs Team | version: 1.1.7 main
+[*] Session id: 6b99eb6e-62be-11f1-8000-bcf10511688b
+wp3 > clients
+[-] No clients connected on AP!
+wp3 > dhcpconf
+
+[*] DHCP Server Option:
+=======================
+
+Id | Class   | IP address range            | Netmask       | Router
+------+---------+-----------------------------+---------------+-------------
+0 | A       | 10.0.0.20/10.0.0.50         | 255.0.0.0     | 10.0.0.1
+1 | B       | 172.16.0.100/172.16.0.150   | 255.240.0.0   | 172.16.0.1
+2 | C       | 192.168.0.100/192.168.0.150 | 255.255.255.0 | 192.168.0.1
+
+[*] DHCP Server Settings:
+=========================
+
+broadcast=10.0.0.255
+classtype=A
+leasetimeDef=600
+leasetimeMax=7200
+netmask=255.0.0.0
+range=10.0.0.20/10.0.0.50
+router=10.0.0.1
+subnet=10.0.0.0
+
+
+wp3 > dhcpmode
+
+[*] DHCP Server:
+================
+
+ID            | Status   | Description
+---------------+----------+--------------------
+dhcpd_server  | False    | Dhcpd DHCP Server
+pydhcp_server | True     | Python DHCP Server
+
+
+
+[*] Settings DNS:
+=================
+
+pydns_server=true
+pydns_verbose=false
+pydns_zone_file=/root/.config/wifipumpkin3/config/app/dns_hosts.ini
+
+
+wp3 >
+
+
+
+
+
+┌─[gaetal@parrot]─[~]
+└──╼ $sudo wp3
+
+.,'
+.''.'
+.' .'
+.    ' . ~,'  `.~ . `    .
+. '  .  '   .`:_. . _:'.   `  .  ` .
+.'   .'     ,     .'^'.    .     `.   `.
+.    .       .A.  .     . .A.       .    .
+.d000b.      .d000b.
+'    '    .d0000000b.  .d0000000b.    `    `
+.    .      .      . db  .     .      .    .
+d00b
+`    `?0o.  `     `     '    '  .o0P'    '
+.    `?00   ooooo.  .ooooo   00P' .   .
+` .   `?00000P ?0bd0P ?00000P' .' . '
+. . `~~   ~~~~  .~~'  . .
+~     - ~~ -    ~
+codename: Gao
+by: @mh4x0f - P0cL4bs Team | version: 1.1.7 main
+[*] Session id: db3ee74e-62be-11f1-8000-bcf10511688b
+wp3 > plugins
+
+[*] Available Plugins:
+======================
+
+Name      | Active   | Description
+-----------+----------+-------------------------------------------------------
+responder | False    | LLMNR, NBT-NS and MDNS poisoner, with built-in HTT...
+sniffkin3 | True     | Sniff for intercept network traffic on TCP protoco...
+
+
+
+[*] Sniffkin3 plugins:
+======================
+
+Name     | Active
+----------+----------
+NTLMSSP  | True
+emails   | True
+ftp      | True
+hexdump  | True
+httpCap  | True
+imageCap | False
+kerberos | True
+summary  | False
+
+
+wp3 > proxies
+
+[*] Available proxies:
+======================
+
+Proxy        | Active   |   Port | Description
+--------------+----------+--------+-------------------------------------------------------
+captiveflask | False    |     80 | Allow block Internet access for users until they o...
+evilqr3      | False    |     80 | Proxy for create captive portal QR phishing WhatsA...
+noproxy      | False    |     80 | Runnning without proxy redirect traffic
+phishkin3    | False    |     80 | Proxy for create captive portal with external phis...
+pumpkinproxy | True     |   8080 | Transparent proxies that you can use to intercept ...
+
+
+
+[*] PumpkinProxy 3 plugins:
+===========================
+
+Name          | Active
+---------------+----------
+beef          | False
+downloadspoof | False
+html_inject   | False
+js_inject     | False
+no-cache      | False
+
+
+
+[*] Settings:
+=============
+
+proxy_port=8080
+
+
+help settings
+=============
+
+Usage: set [proxy_name].[settings] [value]
+
+param [proxy_name]: The proxy name
+param [settings]: The settings optiion name
+param [value]: The value name (true or false or string_path)
+
+Description:
+set setttings variable for especific proxy
+
+Referencies:
+https://wifipumpkin3.github.io/docs/getting-started#core-commands
+
+
+wp3 >
+
+
+
+
+
+//start e stop funzionanti //

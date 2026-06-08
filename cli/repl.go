@@ -9,9 +9,11 @@ import (
 
 func startREPL() {
     reader := bufio.NewReader(os.Stdin)
-    fmt.Println("AP1 interactive shell. Type 'help' for commands, 'exit' to quit.")
+    fmt.Println("codename: Gao")
+    fmt.Println("by: @gaetal | version:", buildVersion)
+    fmt.Printf("[*] Session id: %d\n", time.Now().Unix())
     for {
-        fmt.Print("ap1> ")
+        fmt.Print("ap1 > ")
         line, err := reader.ReadString('\n')
         if err != nil {
             fmt.Fprintln(os.Stderr, "error reading input:", err)
@@ -30,6 +32,7 @@ func startREPL() {
 
         switch cmd {
         case "exit", "quit":
+            cmdExit()
             return
         case "help":
             usage()
@@ -49,6 +52,8 @@ func startREPL() {
             cmdAP(args)
         case "set":
             cmdSet(args)
+        case "presets":
+            cmdPresets(args)
         case "unset":
             cmdUnset(args)
         case "ignore":
@@ -93,6 +98,14 @@ func startREPL() {
             cmdPortal(args)
         case "system":
             cmdSystem(args)
+        case "deauth":
+            cmdDeauth(args)
+        case "eviltwin":
+            cmdEvilTwin(args)
+        case "beacon":
+            cmdBeacon(args)
+        case "monitor":
+            cmdMonitor(args)
         case "templates":
             cmdTemplates(args)
         case "version":

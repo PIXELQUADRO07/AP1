@@ -9,14 +9,23 @@ fn config_path() -> String {
     std::env::var("AP1_DNSMASQ_CONF").unwrap_or_else(|_| "../system/runtime/dnsmasq.conf".to_string())
 }
 
-pub fn generate_dnsmasq_config(interface: &str, portal_ip: &str, dns_ip: &str) -> String {
+pub fn generate_dnsmasq_config(interface: &str, portal_ip: &str, dns_ip: &str, extra_spoofs: &[(&str, &str)]) -> String {
     let iface = if interface.is_empty() { "wlan0" } else { interface };
     let dns_server = if dns_ip.is_empty() { "8.8.8.8" } else { dns_ip };
 
-    format!(
-        "interface={}\nbind-interfaces\nserver={}\naddress=/#/{}/\nlog-queries\nlog-dhcp\n",
-        iface, dns_server, portal_ip
-    )
+    let mut config = format!(
+        "interface={}\nbind-interfaces\nserver={}\nlog-queries\nlog-dhcp\n",
+        iface, dns_server
+    );
+
+    for (domain, ip) in extra_spoofs {
+        config.push_str(&format!("address=/{}/{}\n", domain, ip));
+    }
+
+    // Default redirect for everything else
+    config.push_str(&format!("address=/#/{}\n", portal_ip));
+
+    config
 }
 
 pub fn write_dnsmasq_config(conf: &str, path: &str) -> Result<(), String> {

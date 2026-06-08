@@ -36,6 +36,7 @@ type Profile struct {
 	Channel     int    `yaml:"channel" json:"channel"`
 	Mode        string `yaml:"mode" json:"mode"`
 	DHCPEnabled bool   `yaml:"dhcp_enabled" json:"dhcp_enabled"`
+	Security    string `yaml:"security" json:"security"`
 }
 
 type Config struct {

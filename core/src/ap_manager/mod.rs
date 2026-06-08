@@ -25,7 +25,7 @@ fn normalize_hw_mode(mode: &str) -> &str {
 
 fn build_hostapd_conf(profile: &ApProfile, iface: &str) -> String {
     let hw_mode = normalize_hw_mode(&profile.mode);
-    let password = if profile.password.is_empty() { "ap1pass" } else { &profile.password };
+    let password = if profile.password.is_empty() { "ap1password" } else { &profile.password };
     format!(
         "interface={}\ndriver=nl80211\nssid={}\nhw_mode={}\nchannel={}\nauth_algs=1\nwpa=2\nwpa_passphrase={}\nwpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\n",
         iface, profile.ssid, hw_mode, profile.channel, password
@@ -49,16 +49,16 @@ pub fn activate_profile(profile: &ApProfile) {
 }
 
 pub fn create_ap(profile: &ApProfile) {
-    let iface = "wlan0";
-    let hostapd_conf = build_hostapd_conf(profile, iface);
-    let dnsmasq_conf = build_dnsmasq_conf(profile, iface);
+    let iface = std::env::var("AP1_IFACE").unwrap_or_else(|_| "wlan0".to_string());
+    let hostapd_conf = build_hostapd_conf(profile, &iface);
+    let dnsmasq_conf = build_dnsmasq_conf(profile, &iface);
 
     if let Err(err) = write_profile_configs(&hostapd_conf, &dnsmasq_conf, "../system/runtime") {
         eprintln!("failed to write AP runtime configs: {}", err);
     }
 
-    if let Err(err) = configure_interface(iface, "192.168.50.1", "24") {
-        eprintln!("failed to configure wlan0: {}", err);
+    if let Err(err) = configure_interface(&iface, "192.168.50.1", "24") {
+        eprintln!("failed to configure {}: {}", iface, err);
     }
 
     if let Err(err) = start_hostapd() {

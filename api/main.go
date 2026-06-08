@@ -97,8 +97,11 @@ func main() {
 		addr = os.Getenv("AP1_API_ADDR")
 	}
 	if addr == "" {
-		addr = ":8080"
+		addr = ":8001"
 	}
+
+	services.InitDB("../system/runtime/ap1.db")
+	services.StartLogWatcher("../system/runtime/portal_credentials.log")
 
 	cfg, err := services.LoadConfig(configPath)
 	if err != nil {

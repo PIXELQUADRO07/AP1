@@ -1,35 +1,33 @@
 app:
-  name: AP1
-  environment: development
-  api_url: http://127.0.0.1:8080
-  core_url: http://127.0.0.1:8081
-
+    name: AP1
+    environment: development
+    api_url: http://127.0.0.1:8001
+    core_url: http://127.0.0.1:8081
 network:
-  default_interface: wlan0
-  captive_portal: true
-  template: DarkLogin
-  portal_ip: 192.168.50.1
-  portal_port: 80
-  portal_fallback_port: 8000
-  dns_ip: 192.168.50.1
-  subnet: 24
-
+    default_interface: wlan0
+    captive_portal: true
+    portal_ip: 192.168.50.1
+    portal_port: 80
+    portal_fallback_port: 8000
+    dns_ip: 192.168.50.1
+    subnet: 24
+    template: DarkLogin
 logging:
-  level: info
-  credentials_log: /var/log/ap1/credentials.json
-
+    level: info
+    credentials_log: ""
 active_profile: default
-
 profiles:
-  - name: default
-    ssid: AP1-Default
-    password: ap1pass
-    channel: 6
-    mode: g
-    dhcp_enabled: true
-  - name: guest
-    ssid: AP1-Guest
-    password: guestpass
-    channel: 11
-    mode: n
-    dhcp_enabled: true
+    - name: default
+      ssid: FreeWifi
+      password: ap1password
+      channel: 1
+      mode: g
+      dhcp_enabled: true
+      security: open
+    - name: guest
+      ssid: AP1-Guest
+      password: guestpass
+      channel: 11
+      mode: "n"
+      dhcp_enabled: true
+      security: ""

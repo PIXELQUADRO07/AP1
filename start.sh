@@ -1,56 +1,87 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# AP1 Optimized Startup Script
+set -eo pipefail
+
+# Colors
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
+LOG_DIR="$ROOT_DIR/system/runtime/logs"
 CORE_BIN="$ROOT_DIR/core/target/debug/ap1_core"
 API_BIN="$BIN_DIR/ap1-api"
-CLI_BIN="$BIN_DIR/ap1-cli"
+CLI_BIN="$ROOT_DIR/ap1-cli" # Linked to root for ease of use
 
-function ensure_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Error: '$1' not found. Install $1 before continuing."
-    exit 1
-  fi
-}
+REBUILD=false
+if [[ "${1:-}" == "--rebuild" ]]; then
+    REBUILD=true
+fi
 
-ensure_command cargo
-ensure_command go
+mkdir -p "$BIN_DIR" "$LOG_DIR"
 
-mkdir -p "$BIN_DIR"
+echo -e "${CYAN}[*] AP1 - Edge-Aware Captive Portal Orchestrator${NC}"
 
-echo "[1/4] Build Rust core..."
-cd "$ROOT_DIR/core"
-cargo build
+# 1. Build Phase (Conditional & Silent)
+if [ "$REBUILD" = true ] || [ ! -f "$CORE_BIN" ] || [ ! -f "$API_BIN" ]; then
+    echo -n -e "${YELLOW}[>] Building components... ${NC}"
 
-echo "[2/4] Build Go API..."
-cd "$ROOT_DIR/api"
-go build -o "$API_BIN"
+    # Core
+    cd "$ROOT_DIR/core"
+    cargo build -q > /dev/null 2>&1
 
-echo "[3/4] Build Go CLI..."
-cd "$ROOT_DIR/cli"
-go build -o "$CLI_BIN"
+    # API
+    cd "$ROOT_DIR/api"
+    go build -o "$API_BIN" main.go > /dev/null 2>&1
 
-cd "$ROOT_DIR"
+    # CLI
+    cd "$ROOT_DIR/cli"
+    go build -o "$CLI_BIN" main.go repl.go tui.go > /dev/null 2>&1
 
+    echo -e "${GREEN}Done!${NC}"
+else
+    echo -e "${GREEN}[*] Binaries ready. Skipping build (use --rebuild to force).${NC}"
+fi
+
+# 2. Cleanup function
 function cleanup() {
-  echo "
-Stopping AP1..."
+  echo -e "\n${RED}[!] Stopping AP1 services...${NC}"
   kill "${CORE_PID:-}" "${API_PID:-}" 2>/dev/null || true
+  exit 0
 }
 trap cleanup EXIT INT TERM
 
-echo "[4/4] Starting core and API in background..."
-"$CORE_BIN" &
+# 3. Execution Phase
+echo -n -e "${YELLOW}[>] Starting Core & API in background... ${NC}"
+
+# Start Core
+cd "$ROOT_DIR/core"
+"$CORE_BIN" > "$LOG_DIR/core.log" 2>&1 &
 CORE_PID=$!
-"$API_BIN" -config "$ROOT_DIR/config/global.yaml" -plugins "$ROOT_DIR/config/plugins.yaml" -addr ":8080" &
+
+# Start API
+cd "$ROOT_DIR/api"
+"$API_BIN" -config "$ROOT_DIR/config/global.yaml" -plugins "$ROOT_DIR/config/plugins.yaml" -addr ":8080" > "$LOG_DIR/api.log" 2>&1 &
 API_PID=$!
 
-sleep 2
+# Give it a second to initialize
+sleep 1.5
 
-echo "AP1 started."
-echo "  core PID = $CORE_PID"
-echo "  api  PID = $API_PID"
-echo "Use '$CLI_BIN status' to verify status, or press Ctrl+C to stop everything."
+if ps -p $CORE_PID > /dev/null && ps -p $API_PID > /dev/null; then
+    echo -e "${GREEN}Running!${NC}"
+    echo -e "${CYAN}[*] Core Log: system/runtime/logs/core.log${NC}"
+    echo -e "${CYAN}[*] API Log:  system/runtime/logs/api.log${NC}"
+    echo -e "--------------------------------------------------------"
+    echo -e "${GREEN}AP1 is ready. Launching interactive CLI...${NC}"
+    echo -e "--------------------------------------------------------"
 
-wait
+    # 4. Launch CLI automatically
+    sudo "$CLI_BIN" interactive
+else
+    echo -e "${RED}Failed!${NC}"
+    echo -e "Check logs in $LOG_DIR for details."
+    exit 1
+fi

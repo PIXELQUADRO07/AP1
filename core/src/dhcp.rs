@@ -22,7 +22,23 @@ pub fn write_dhcp_config(conf: &str, path: &str) -> Result<(), String> {
 pub fn generate_dhcp_config(interface: &str, _network: &str, range_start: &str, range_end: &str, lease_time: &str) -> String {
     let iface = if interface.is_empty() { "wlan0" } else { interface };
     let lease = if lease_time.is_empty() { "12h" } else { lease_time };
-    format!("interface={}\ndhcp-range={},{},{}\n", iface, range_start, range_end, lease)
+    format!(
+        "interface={}\ndhcp-range={},{},{}\ndhcp-option=3,192.168.50.1\ndhcp-option=6,192.168.50.1\nlog-dhcp\n",
+        iface, range_start, range_end, lease
+    )
+}
+
+pub fn parse_dhcp_logs(log_path: &str) -> Vec<String> {
+    // In a real scenario, we would parse dnsmasq logs to find DHCPACK
+    // and extract MAC, IP, and Hostname
+    if let Ok(content) = fs::read_to_string(log_path) {
+        content.lines()
+            .filter(|l| l.contains("DHCPACK"))
+            .map(|s| s.to_string())
+            .collect()
+    } else {
+        Vec::new()
+    }
 }
 
 pub fn start_dhcp() -> Result<String, String> {
