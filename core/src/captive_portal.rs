@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use std::thread;
 use tera::{Tera, Context};
@@ -121,7 +120,7 @@ fn render_page(template_name: &str, cfg: &PortalConfig, context_data: HashMap<&s
     }
 }
 
-fn login_page_fallback(ip: &str) -> String {
+fn login_page_fallback(_ip: &str) -> String {
     let body = format!(r#"<!DOCTYPE html><html><body><h1>AP1 Login</h1><form method='POST' action='/login'>
         User: <input name='login'><br>Pass: <input type='password' name='password'><br>
         <button type='submit'>Login</button></form></body></html>"#);
@@ -248,6 +247,19 @@ pub fn stop_portal() {
 
 pub fn is_running() -> bool {
     portal_state().running.load(Ordering::SeqCst)
+}
+
+pub fn log_credentials(entry: &str) {
+    let log_path = std::env::var("AP1_PORTAL_LOG")
+        .unwrap_or_else(|_| "../system/runtime/portal_credentials.log".to_string());
+
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        let _ = writeln!(file, "{}", entry);
+    }
 }
 
 pub fn read_credentials() -> Vec<String> {

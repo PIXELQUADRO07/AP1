@@ -58,19 +58,12 @@ else
     fi
 fi
 
-function build_if_needed() {
-    local rebuild=false
-    if [[ "${1:-}" == "--rebuild" || "${2:-}" == "--rebuild" ]] || [ ! -f "$CORE_BIN" ] || [ ! -f "$API_BIN" ] || [ ! -f "$CLI_BIN" ]; then
-        rebuild=true
-    fi
-
-    if [ "$rebuild" = true ]; then
-        echo -n -e "${YELLOW}[>] Preparing AP1 environment... ${NC}"
-        cd "$ROOT_DIR/core" && cargo build -q > /dev/null 2>&1 || (echo -e "${RED}Core Build Failed${NC}" && exit 1)
-        cd "$ROOT_DIR/api" && go build -o "$API_BIN" main.go > /dev/null 2>&1 || (echo -e "${RED}API Build Failed${NC}" && exit 1)
-        cd "$ROOT_DIR/cli" && go build -o "$CLI_BIN" main.go repl.go tui.go > /dev/null 2>&1 || (echo -e "${RED}CLI Build Failed${NC}" && exit 1)
-        echo -e "${GREEN}Ready!${NC}"
-    fi
+function build_components() {
+    echo -n -e "${YELLOW}[>] Checking/Building AP1 components... ${NC}"
+    cd "$ROOT_DIR/core" && cargo build -q > /dev/null 2>&1 || (echo -e "${RED}Core Build Failed${NC}" && exit 1)
+    cd "$ROOT_DIR/api" && go build -o "$API_BIN" main.go > /dev/null 2>&1 || (echo -e "${RED}API Build Failed${NC}" && exit 1)
+    cd "$ROOT_DIR/cli" && go build -o "$CLI_BIN" main.go repl.go tui.go > /dev/null 2>&1 || (echo -e "${RED}CLI Build Failed${NC}" && exit 1)
+    echo -e "${GREEN}Ready!${NC}"
 }
 
 function start_services() {
@@ -121,7 +114,7 @@ EOF
 echo -e "      AP1 - Rogue AP Orchestrator${NC}\n"
 echo -e "${GREEN}[*] Target Interface: $SELECTED_IFACE${NC}"
 
-build_if_needed "$@"
+build_components
 start_services
 
 "$CLI_BIN" interactive

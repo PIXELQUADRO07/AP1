@@ -37,26 +37,22 @@ cat << "EOF"
 EOF
 echo -e "      AP1 - Edge-Aware Orchestrator${NC}\n"
 
-# 1. Build Phase (Conditional & Silent)
-if [ "$REBUILD" = true ] || [ ! -f "$CORE_BIN" ] || [ ! -f "$API_BIN" ]; then
-    echo -n -e "${YELLOW}[>] Building components... ${NC}"
+# 1. Build Phase (Always Rebuild/Check)
+echo -n -e "${YELLOW}[>] Building/Updating components... ${NC}"
 
-    # Core
-    cd "$ROOT_DIR/core"
-    cargo build -q > /dev/null 2>&1
+# Core
+cd "$ROOT_DIR/core"
+cargo build -q > /dev/null 2>&1 || (echo -e "${RED}Core Build Failed${NC}" && exit 1)
 
-    # API
-    cd "$ROOT_DIR/api"
-    go build -o "$API_BIN" main.go > /dev/null 2>&1
+# API
+cd "$ROOT_DIR/api"
+go build -o "$API_BIN" main.go > /dev/null 2>&1 || (echo -e "${RED}API Build Failed${NC}" && exit 1)
 
-    # CLI
-    cd "$ROOT_DIR/cli"
-    go build -o "$CLI_BIN" main.go repl.go tui.go > /dev/null 2>&1
+# CLI
+cd "$ROOT_DIR/cli"
+go build -o "$CLI_BIN" main.go repl.go tui.go > /dev/null 2>&1 || (echo -e "${RED}CLI Build Failed${NC}" && exit 1)
 
-    echo -e "${GREEN}Done!${NC}"
-else
-    echo -e "${GREEN}[*] Binaries ready. Skipping build (use --rebuild to force).${NC}"
-fi
+echo -e "${GREEN}Done!${NC}"
 
 # 2. Cleanup function
 function cleanup() {

@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use axum::{
-    extract::{Path as AxumPath, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};

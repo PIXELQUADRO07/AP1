@@ -64,7 +64,8 @@ pub fn apply_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> 
     fs::write("/proc/sys/net/ipv4/ip_forward", "1").map_err(|e| format!("failed to enable ip_forward: {}", e))?;
 
     // Find the real internet interface (WAN)
-    let wan_iface = run_command("sh", &["-c", "ip route | grep default | grep -v " + iface + " | awk '{print $5}' | head -n 1"])
+    let cmd = format!("ip route | grep default | grep -v {} | awk '{{print $5}}' | head -n 1", iface);
+    let wan_iface = run_command("sh", &["-c", &cmd])
         .unwrap_or_default()
         .trim()
         .to_string();
@@ -82,7 +83,7 @@ pub fn apply_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> 
     let _ = run_command("iptables", &["-t", "nat", "-D", "PREROUTING", "-j", "AP1_NAT"]);
     let _ = run_command("iptables", &["-t", "nat", "-I", "PREROUTING", "1", "-j", "AP1_NAT"]);
 
-    let mut rules: Vec<Vec<&str>> = vec![
+    let rules: Vec<Vec<&str>> = vec![
         vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", &dest_80],
         vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "tcp", "--dport", "443", "-j", "DNAT", "--to-destination", &dest_443],
         vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", &dest_53],
@@ -109,7 +110,8 @@ pub fn clear_firewall_rules(iface: &str, _portal_ip: &str) -> Result<(), String>
     let _ = run_command("iptables", &["-t", "nat", "-F", "AP1_NAT"]);
     let _ = run_command("iptables", &["-t", "nat", "-X", "AP1_NAT"]);
 
-    let wan_iface = run_command("sh", &["-c", "ip route | grep default | grep -v " + iface + " | awk '{print $5}' | head -n 1"])
+    let cmd = format!("ip route | grep default | grep -v {} | awk '{{print $5}}' | head -n 1", iface);
+    let wan_iface = run_command("sh", &["-c", &cmd])
         .unwrap_or_default()
         .trim()
         .to_string();
