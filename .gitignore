@@ -64,3 +64,4 @@ __pycache__/
 *.crt
 npm-debug.log*
 ASCII
+core/target/
