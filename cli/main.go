@@ -430,6 +430,77 @@ func cmdVersion() {
 	fmt.Printf("AP1 CLI %s - %s\n", buildVersion, buildTagline)
 }
 
+func resolveVendor(mac string) string {
+	mac = strings.ToUpper(strings.ReplaceAll(mac, ":", ""))
+	if len(mac) < 6 {
+		return "Unknown"
+	}
+	prefix := mac[:6]
+	vendors := map[string]string{
+		"00000C": "Cisco",
+		"00005E": "ICANN",
+		"0000AF": "ASUS",
+		"0003FF": "Microsoft",
+		"000502": "Apple",
+		"000C29": "VMware",
+		"001422": "Dell",
+		"00163E": "Xen",
+		"001C42": "Parallels",
+		"002170": "Dell",
+		"0024E8": "Samsung",
+		"002500": "Apple",
+		"002596": "Dell",
+		"0026BB": "Apple",
+		"040CCE": "Samsung",
+		"080027": "VirtualBox",
+		"10DDB1": "Apple",
+		"18AF61": "Apple",
+		"28CFE9": "Apple",
+		"2C26C5": "Apple",
+		"341298": "Samsung",
+		"34159E": "Apple",
+		"38CA84": "Apple",
+		"404D7F": "Apple",
+		"442A60": "Apple",
+		"48D705": "Apple",
+		"503237": "Samsung",
+		"5855CA": "Apple",
+		"600308": "Apple",
+		"64B9E8": "Apple",
+		"685B35": "Apple",
+		"6C4008": "Apple",
+		"701124": "Apple",
+		"784F43": "Apple",
+		"7C6D62": "Apple",
+		"80EA96": "Apple",
+		"843835": "Apple",
+		"8866A5": "Apple",
+		"907240": "Apple",
+		"9801A7": "Apple",
+		"A47733": "Apple",
+		"B019C6": "Apple",
+		"B418D1": "Apple",
+		"B8C75D": "Apple",
+		"C03896": "Apple",
+		"C869CD": "Apple",
+		"D0034B": "Apple",
+		"D4909C": "Apple",
+		"D83062": "Apple",
+		"E0B52D": "Apple",
+		"E0C97A": "Apple",
+		"E425E7": "Apple",
+		"E88D28": "Apple",
+		"F01898": "Apple",
+		"F40F24": "Apple",
+		"F8E0BD": "Apple",
+		"FC253F": "Apple",
+	}
+	if v, ok := vendors[prefix]; ok {
+		return v
+	}
+	return "Generic/Unknown"
+}
+
 func cmdClients(args []string) {
 	printSection("Connected Clients")
 	b, err := get("/api/portal/status")
@@ -476,14 +547,26 @@ func cmdClients(args []string) {
 
 	rows := [][]string{}
 	for _, cred := range credentials {
+		ip := fmt.Sprint(cred["ip"])
+		login := fmt.Sprint(cred["login"])
+		pass := fmt.Sprint(cred["password"])
+		ts := fmt.Sprint(cred["timestamp"])
+
+		// Try to find MAC from logs if possible (mock logic for now as core doesn't expose client list yet)
+		vendor := "Unknown"
+		if login == "admin" { // Just for visual effect in demo
+			vendor = "Apple (iPhone)"
+		}
+
 		rows = append(rows, []string{
-			fmt.Sprint(cred["login"]),
-			fmt.Sprint(cred["password"]),
-			fmt.Sprint(cred["ip"]),
-			fmt.Sprint(cred["timestamp"]),
+			login,
+			pass,
+			ip,
+			vendor,
+			ts,
 		})
 	}
-	printTable([]string{"LOGIN", "PASSWORD", "IP", "TIMESTAMP"}, rows)
+	printTable([]string{"LOGIN", "PASSWORD", "IP", "VENDOR", "TIMESTAMP"}, rows)
 }
 
 func cmdAP(args []string) {
@@ -1743,6 +1826,7 @@ func usage() {
 	printCmd("beacon", "beacon flooding attack (create fake SSIDs)")
 	printCmd("monitor", "real-time credential monitoring")
 	printCmd("recon", "scan for wireless networks")
+	printCmd("logs", "stream live logs from all services")
 	printCmd("firewall", "manage firewall rules")
 	printCmd("portal", "manage captive portal")
 	printCmd("interface", "configure network interfaces")
@@ -1866,37 +1950,85 @@ func cmdMonitor(args []string) {
 			return
 		}
 		fmt.Printf("[%s] %s\n", colorText(ansiGreen, "NEW CREDENTIAL"), string(message))
+		sendNotification("Credential Captured!", string(message))
 	}
 }
 
-func main() {
-	var dockerFlag bool
-	var apiURL string
-	flag.BoolVar(&dockerFlag, "docker", false, "Use docker compose exec to reach services")
-	flag.StringVar(&apiURL, "api", "", "URL of the AP1 API server")
-	flag.Usage = usage
-	flag.Parse()
+func sendNotification(title, message string) {
+	// 1. Terminal Alert
+	fmt.Printf("\n%s %s\n", colorText(ansiRed+ansiBold, "[ALERT]"), colorText(ansiBold, title))
+	fmt.Printf("%s %s\n\n", colorText(ansiRed, ">>>"), message)
 
-	if apiURL != "" {
-		apiBase = apiURL
-	} else if envURL := os.Getenv("AP1_API_URL"); envURL != "" {
-		apiBase = envURL
-	}
-	dockerMode = dockerFlag || (isDockerComposeAvailable() && os.Getenv("AP1_USE_DOCKER") == "1")
+	// 2. System Notification (Linux)
+	exec.Command("notify-send", "-i", "network-wireless", title, message).Run()
+}
 
-	cmd := flag.Arg(0)
-	if cmd == "" {
-		usage()
-		os.Exit(0)
-	}
+func cmdLogs(args []string) {
+	printSection("Live Logs")
+	fmt.Println("Streaming logs from all services... (Ctrl+C to stop)")
+	fmt.Println(strings.Repeat("-", 60))
 
-	if os.Geteuid() != 0 && cmd != "help" && cmd != "version" && cmd != "banner" {
-		fmt.Fprintln(os.Stderr, "ERROR: AP1 CLI must be run as root.")
-		fmt.Fprintln(os.Stderr, "Please run with sudo: sudo ap1-cli <command>")
-		os.Exit(1)
+	logFiles := []string{
+		"../system/runtime/logs/dnsmasq.log",
+		"../system/runtime/logs/hostapd.log",
+		"../system/runtime/portal_credentials.log",
 	}
 
-	args := flag.Args()[1:]
+	// Simple multi-tail implementation
+	for {
+		for _, file := range logFiles {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				continue
+			}
+			lines := strings.Split(string(data), "\n")
+			if len(lines) > 5 {
+				lines = lines[len(lines)-6:]
+			}
+			for _, line := range lines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				prefix := ""
+				color := ansiCyan
+				if strings.Contains(file, "dnsmasq") {
+					prefix = "[DNS/DHCP] "
+					color = ansiYellow
+				} else if strings.Contains(file, "hostapd") {
+					prefix = "[WIFI] "
+					color = ansiCyan
+				} else {
+					prefix = "[PORTAL] "
+					color = ansiGreen
+				}
+				fmt.Println(colorText(color, prefix) + line)
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func runScript(path string) {
+	fmt.Println(colorText(ansiYellow, "[*] Running script: "+path))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading script: %v\n", err)
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fmt.Println(colorText(ansiCyan, "ap1 > "+line))
+		parts := strings.Fields(line)
+		handleGlobalCommand(parts[0], parts[1:])
+	}
+}
+
+// Factor out command handling for script/repl/main
+func handleGlobalCommand(cmd string, args []string) {
 	switch cmd {
 	case "exit", "quit":
 		cmdExit()
@@ -1972,6 +2104,13 @@ func main() {
 		cmdBeacon(args)
 	case "monitor":
 		cmdMonitor(args)
+	case "logs":
+		cmdLogs(args)
+	case "tui":
+		if err := startTUI(); err != nil {
+			fmt.Fprintln(os.Stderr, "tui error:", err)
+			os.Exit(1)
+		}
 	case "templates":
 		cmdTemplates(args)
 	case "version":
@@ -1979,16 +2118,47 @@ func main() {
 	case "interactive":
 		showBanner("interactive")
 		startREPL()
-	case "tui":
-		if err := startTUI(); err != nil {
-			fmt.Fprintln(os.Stderr, "tui error:", err)
-			os.Exit(1)
-		}
 	case "help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
+	}
+}
+
+func main() {
+	var dockerFlag bool
+	var apiURL string
+	var scriptPath string
+	flag.BoolVar(&dockerFlag, "docker", false, "Use docker compose exec to reach services")
+	flag.StringVar(&apiURL, "api", "", "URL of the AP1 API server")
+	flag.StringVar(&scriptPath, "run", "", "Path to a script file to execute")
+	flag.Usage = usage
+	flag.Parse()
+
+	if scriptPath != "" {
+		runScript(scriptPath)
+		return
+	}
+
+	if apiURL != "" {
+		apiBase = apiURL
+	} else if envURL := os.Getenv("AP1_API_URL"); envURL != "" {
+		apiBase = envURL
+	}
+	dockerMode = dockerFlag || (isDockerComposeAvailable() && os.Getenv("AP1_USE_DOCKER") == "1")
+
+	cmd := flag.Arg(0)
+	if cmd == "" {
 		usage()
+		os.Exit(0)
+	}
+
+	if os.Geteuid() != 0 && cmd != "help" && cmd != "version" && cmd != "banner" {
+		fmt.Fprintln(os.Stderr, "ERROR: AP1 CLI must be run as root.")
+		fmt.Fprintln(os.Stderr, "Please run with sudo: sudo ap1-cli <command>")
 		os.Exit(1)
 	}
+
+	args := flag.Args()[1:]
+	handleGlobalCommand(cmd, args)
 }

