@@ -43,6 +43,7 @@ mod https_detection;
 mod logging;
 mod config;
 mod database;
+mod sniff;
 
 use crate::config::{AppConfig, Profile};
 
@@ -133,6 +134,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     proxy::init_proxy();
     orchestrator::start_module("core");
 
+    // Start advanced sniffer
+    sniff::start_sniffer(network_iface.clone());
+
     // Start Watchdog Thread (Step 2 Preview)
     start_watchdog();
 
@@ -161,6 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/config/preset", post(config_preset_handler))
         .route("/api/recon/networks", get(recon_networks_handler))
         .route("/api/recon/congestion", get(recon_congestion_handler))
+        .route("/api/traffic", get(traffic_handler))
         .route("/api/deauth/start", post(deauth_start_handler))
         .route("/api/eviltwin/start", post(eviltwin_start_handler))
         .route("/api/beacon/start", post(beacon_start_handler))
@@ -409,6 +414,11 @@ async fn recon_networks_handler(Query(params): Query<HashMap<String, String>>) -
 async fn recon_congestion_handler() -> Json<serde_json::Value> {
     recon::analyze_congestion("wlan0");
     Json(serde_json::json!({"status": "analysis printed to core log"}))
+}
+
+async fn traffic_handler(Query(params): Query<HashMap<String, String>>) -> Json<Vec<serde_json::Value>> {
+    let limit = params.get("limit").and_then(|l| l.parse::<i32>().ok()).unwrap_or(50);
+    Json(database::get_traffic(limit))
 }
 
 #[derive(Deserialize)]

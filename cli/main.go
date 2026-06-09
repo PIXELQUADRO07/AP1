@@ -1827,6 +1827,7 @@ func usage() {
 	printCmd("monitor", "real-time credential monitoring")
 	printCmd("recon", "scan for wireless networks")
 	printCmd("logs", "stream live logs from all services")
+	printCmd("traffic", "show advanced traffic capture data")
 	printCmd("firewall", "manage firewall rules")
 	printCmd("portal", "manage captive portal")
 	printCmd("interface", "configure network interfaces")
@@ -2008,6 +2009,41 @@ func cmdLogs(args []string) {
 	}
 }
 
+func cmdTraffic(args []string) {
+	printSection("Advanced Traffic Capture")
+	limit := "20"
+	if len(args) > 0 {
+		limit = args[0]
+	}
+	b, err := get("/api/traffic?limit=" + limit)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return
+	}
+	var traffic []map[string]interface{}
+	if err := json.Unmarshal(b, &traffic); err != nil {
+		fmt.Fprintln(os.Stderr, "failed to parse traffic:", err)
+		return
+	}
+
+	if len(traffic) == 0 {
+		fmt.Println("No traffic captured yet.")
+		return
+	}
+
+	rows := [][]string{}
+	for _, t := range traffic {
+		rows = append(rows, []string{
+			fmt.Sprint(t["source"]),
+			fmt.Sprint(t["destination"]),
+			fmt.Sprint(t["protocol"]),
+			fmt.Sprint(t["info"]),
+			fmt.Sprint(t["timestamp"]),
+		})
+	}
+	printTable([]string{"SOURCE", "DESTINATION", "PROTO", "INFO", "TIMESTAMP"}, rows)
+}
+
 func runScript(path string) {
 	fmt.Println(colorText(ansiYellow, "[*] Running script: "+path))
 	data, err := os.ReadFile(path)
@@ -2106,6 +2142,8 @@ func handleGlobalCommand(cmd string, args []string) {
 		cmdMonitor(args)
 	case "logs":
 		cmdLogs(args)
+	case "traffic":
+		cmdTraffic(args)
 	case "tui":
 		if err := startTUI(); err != nil {
 			fmt.Fprintln(os.Stderr, "tui error:", err)

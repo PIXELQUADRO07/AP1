@@ -26,6 +26,14 @@ pub fn get_db() -> &'static Mutex<Connection> {
                 first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS traffic (
+                id INTEGER PRIMARY KEY,
+                source TEXT,
+                destination TEXT,
+                protocol TEXT,
+                info TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         ").expect("Failed to initialize tables");
 
         Mutex::new(connection)
@@ -62,6 +70,39 @@ pub fn get_credentials() -> Vec<serde_json::Value> {
         obj.insert("ip".to_string(), serde_json::Value::String(statement.read::<String, _>("ip").unwrap()));
         obj.insert("os".to_string(), serde_json::Value::String(statement.read::<String, _>("os").unwrap()));
         obj.insert("ua".to_string(), serde_json::Value::String(statement.read::<String, _>("ua").unwrap()));
+        obj.insert("timestamp".to_string(), serde_json::Value::String(statement.read::<String, _>("timestamp").unwrap()));
+        results.push(serde_json::Value::Object(obj));
+    }
+    results
+}
+
+pub fn log_traffic(source: &str, destination: &str, protocol: &str, info: &str) {
+    let db = match get_db().lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    let query = "INSERT INTO traffic (source, destination, protocol, info) VALUES (?, ?, ?, ?)";
+    let mut statement = db.prepare(query).unwrap();
+    statement.bind((1, source)).unwrap();
+    statement.bind((2, destination)).unwrap();
+    statement.bind((3, protocol)).unwrap();
+    statement.bind((4, info)).unwrap();
+
+    let _ = statement.next();
+}
+
+pub fn get_traffic(limit: i32) -> Vec<serde_json::Value> {
+    let db = get_db().lock().unwrap();
+    let query = format!("SELECT source, destination, protocol, info, timestamp FROM traffic ORDER BY timestamp DESC LIMIT {}", limit);
+    let mut statement = db.prepare(query).unwrap();
+
+    let mut results = Vec::new();
+    while let Ok(State::Row) = statement.next() {
+        let mut obj = serde_json::Map::new();
+        obj.insert("source".to_string(), serde_json::Value::String(statement.read::<String, _>("source").unwrap()));
+        obj.insert("destination".to_string(), serde_json::Value::String(statement.read::<String, _>("destination").unwrap()));
+        obj.insert("protocol".to_string(), serde_json::Value::String(statement.read::<String, _>("protocol").unwrap()));
+        obj.insert("info".to_string(), serde_json::Value::String(statement.read::<String, _>("info").unwrap()));
         obj.insert("timestamp".to_string(), serde_json::Value::String(statement.read::<String, _>("timestamp").unwrap()));
         results.push(serde_json::Value::Object(obj));
     }

@@ -110,6 +110,7 @@ func startREPL() {
 		),
 		readline.PcItem("monitor"),
 		readline.PcItem("logs"),
+		readline.PcItem("traffic"),
 		readline.PcItem("tui"),
 		readline.PcItem("templates",
 			readline.PcItem("list"),
