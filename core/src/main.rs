@@ -161,6 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/portal/status", get(portal_status_handler))
         .route("/api/portal/credentials", get(portal_credentials_handler))
         .route("/api/config/set_interface", post(set_interface_handler))
+        .route("/api/config/set_template", post(set_template_handler))
         .route("/api/config/update", post(config_update_handler))
         .route("/api/config/preset", post(config_preset_handler))
         .route("/api/recon/networks", get(recon_networks_handler))
@@ -323,6 +324,26 @@ async fn set_interface_handler(State(state): State<Arc<AppState>>, Json(payload)
     } else {
         (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "interface is required"}))).into_response()
     }
+}
+
+#[derive(Deserialize)]
+struct TemplateRequest {
+    template: String,
+}
+
+async fn set_template_handler(State(state): State<Arc<AppState>>, Json(payload): Json<TemplateRequest>) -> impl IntoResponse {
+    let mut config = get_app_config().lock().unwrap();
+    config.network.template = payload.template.clone();
+    let _ = save_config(&state.config_path, &config);
+
+    let template_dir = if payload.template.is_empty() {
+        "../config/templates".to_string()
+    } else {
+        format!("../config/templates/{}", payload.template)
+    };
+
+    captive_portal::update_template_dir(&template_dir);
+    Json(serde_json::json!({"status": format!("template set to {}", payload.template)}))
 }
 
 async fn config_update_handler(State(state): State<Arc<AppState>>, Json(json_body): Json<serde_json::Value>) -> Json<serde_json::Value> {

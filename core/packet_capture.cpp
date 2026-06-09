@@ -43,6 +43,15 @@ extern "C" int start_packet_capture(const char* iface, const char* log_path) {
             return;
         }
 
+        // Configurazione promiscuous mode
+        struct packet_mreq mreq;
+        std::memset(&mreq, 0, sizeof(mreq));
+        mreq.mr_ifindex = ifr.ifr_ifindex;
+        mreq.mr_type = PACKET_MR_PROMISC;
+        if (setsockopt(sock, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == -1) {
+            std::cerr << "Warning: Could not set promiscuous mode\n";
+        }
+
         struct sockaddr_ll saddr;
         std::memset(&saddr, 0, sizeof(saddr));
         saddr.sll_family = AF_PACKET;
@@ -78,8 +87,40 @@ extern "C" int start_packet_capture(const char* iface, const char* log_path) {
             char dst[INET_ADDRSTRLEN] = {0};
             inet_ntop(AF_INET, &ip->saddr, src, sizeof(src));
             inet_ntop(AF_INET, &ip->daddr, dst, sizeof(dst));
-            std::string proto = std::to_string(static_cast<int>(ip->protocol));
-            logfile << src << " -> " << dst << " proto=" << proto << " len=" << packet_len << "\n";
+
+            std::string extra_info = "";
+            std::string proto_name = std::to_string(static_cast<int>(ip->protocol));
+
+            if (ip->protocol == IPPROTO_TCP) {
+                proto_name = "TCP";
+                auto* tcp = reinterpret_cast<struct tcphdr*>(buffer + sizeof(struct ethhdr) + (ip->ihl * 4));
+                extra_info = " port=" + std::to_string(ntohs(tcp->dest));
+
+                // Analisi sommaria per flag (SYN/ACK/FIN)
+                if (tcp->syn) extra_info += " [SYN]";
+                if (tcp->fin) extra_info += " [FIN]";
+                if (tcp->psh) {
+                    // Cerca stringhe comuni nel payload TCP (es. HTTP)
+                    const char* payload = buffer + sizeof(struct ethhdr) + (ip->ihl * 4) + (tcp->doff * 4);
+                    size_t payload_len = packet_len - (sizeof(struct ethhdr) + (ip->ihl * 4) + (tcp->doff * 4));
+                    if (payload_len > 0) {
+                        if (std::strstr(payload, "GET ") || std::strstr(payload, "POST ") || std::strstr(payload, "HTTP/")) {
+                            proto_name = "HTTP";
+                        }
+                    }
+                }
+            } else if (ip->protocol == IPPROTO_UDP) {
+                proto_name = "UDP";
+                auto* udp = reinterpret_cast<struct udphdr*>(buffer + sizeof(struct ethhdr) + (ip->ihl * 4));
+                extra_info = " port=" + std::to_string(ntohs(udp->dest));
+                if (ntohs(udp->dest) == 53 || ntohs(udp->source) == 53) {
+                    proto_name = "DNS";
+                }
+            } else if (ip->protocol == IPPROTO_ICMP) {
+                proto_name = "ICMP";
+            }
+
+            logfile << "[" << proto_name << "] " << src << " -> " << dst << extra_info << " len=" << packet_len << "\n";
             logfile.flush();
         }
 

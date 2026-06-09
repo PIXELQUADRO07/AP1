@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -22,12 +23,12 @@ func (m menuItem) Description() string {
 		return "Live monitoring of clients and credentials"
 	case "System Status":
 		return "Core services and network interfaces state"
+	case "Traffic Analyzer":
+		return "Real-time packet inspection and flow graphs"
 	case "AP Profiles":
 		return "Wireless configuration profiles"
 	case "Plugins & Proxies":
 		return "Active modules and traffic interceptors"
-	case "Portal Logs":
-		return "Live streaming of captured events"
 	case "Quit":
 		return "Exit the AP1 terminal interface"
 	default:
@@ -39,14 +40,15 @@ func (m menuItem) FilterValue() string { return string(m) }
 type tickMsg time.Time
 
 type model struct {
-	list     list.Model
-	viewport viewport.Model
-	content  string
-	err      error
-	ready    bool
-	width    int
-	height   int
-	lastLog  string
+	list          list.Model
+	viewport      viewport.Model
+	content       string
+	err           error
+	ready         bool
+	width         int
+	height        int
+	trafficData   []int
+	maxTraffic    int
 }
 
 var (
@@ -58,15 +60,16 @@ var (
 	footerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#b0b0b0")).Italic(true)
 	successStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff00"))
 	warnStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffff00"))
+	graphStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff87"))
 )
 
 func startTUI() error {
 	items := []list.Item{
 		menuItem("Dashboard"),
 		menuItem("System Status"),
+		menuItem("Traffic Analyzer"),
 		menuItem("AP Profiles"),
 		menuItem("Plugins & Proxies"),
-		menuItem("Portal Logs"),
 		menuItem("Quit"),
 	}
 	delegate := list.NewDefaultDelegate()
@@ -80,8 +83,10 @@ func startTUI() error {
 	l.SetShowHelp(false)
 
 	m := model{
-		list:    l,
-		content: "AP1 Orchestrator initializing...",
+		list:        l,
+		content:     "AP1 Orchestrator initializing...",
+		trafficData: make([]int, 40),
+		maxTraffic:  10,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -117,12 +122,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
+		// Update traffic graph data
+		m.updateTrafficStats()
+
 		if sel := m.list.SelectedItem(); sel != nil {
 			switch sel.FilterValue() {
 			case "Dashboard":
 				m.content = m.refreshDashboard()
-			case "Portal Logs":
-				m.content = m.refreshLogs()
+			case "Traffic Analyzer":
+				m.content = m.refreshTrafficAnalyzer()
 			}
 			m.viewport.SetContent(m.content)
 		}
@@ -142,12 +150,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.content = m.refreshDashboard()
 			case "System Status":
 				m.content = m.refreshStatus()
+			case "Traffic Analyzer":
+				m.content = m.refreshTrafficAnalyzer()
 			case "AP Profiles":
 				m.content = fetchPrettyJSON("/api/profiles")
 			case "Plugins & Proxies":
 				m.content = m.refreshModules()
-			case "Portal Logs":
-				m.content = m.refreshLogs()
 			case "Quit":
 				return m, tea.Quit
 			}
@@ -166,6 +174,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m *model) updateTrafficStats() {
+	// Shift data
+	copy(m.trafficData, m.trafficData[1:])
+
+	// Get real traffic count from API
+	b, err := get("/api/traffic?limit=10")
+	newVal := 0
+	if err == nil {
+		var traffic []interface{}
+		json.Unmarshal(b, &traffic)
+		newVal = len(traffic)
+	} else {
+		// Mock data if API fails
+		newVal = rand.Intn(5)
+	}
+
+	m.trafficData[len(m.trafficData)-1] = newVal
+	if newVal > m.maxTraffic {
+		m.maxTraffic = newVal
+	}
+}
+
+func (m model) drawGraph(width int, height int) string {
+	if m.maxTraffic == 0 { m.maxTraffic = 1 }
+	var out strings.Builder
+
+	// ASCII characters for levels
+	runes := []string{" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+
+	for h := height; h > 0; h-- {
+		for i := 0; i < len(m.trafficData); i++ {
+			val := m.trafficData[i]
+			normalized := (val * height) / m.maxTraffic
+			if normalized >= h {
+				out.WriteString(graphStyle.Render("┃"))
+			} else {
+				out.WriteString(" ")
+			}
+		}
+		out.WriteString("\n")
+	}
+
+	// Bottom line
+	out.WriteString(strings.Repeat("━", len(m.trafficData)) + "\n")
+	return out.String()
+}
+
 func (m model) refreshDashboard() string {
 	var out strings.Builder
 	out.WriteString(headerStyle.Render(" NETWORK ORCHESTRATOR DASHBOARD ") + "\n\n")
@@ -179,11 +234,9 @@ func (m model) refreshDashboard() string {
 		activeProfile := fmt.Sprint(cfg["active_profile"])
 		net, _ := cfg["network"].(map[string]interface{})
 		iface := fmt.Sprint(net["default_interface"])
-		portalIP := fmt.Sprint(net["portal_ip"])
 
 		out.WriteString(fmt.Sprintf("Active Profile: %s\n", subtitleStyle.Render(activeProfile)))
 		out.WriteString(fmt.Sprintf("Interface:      %s\n", iface))
-		out.WriteString(fmt.Sprintf("Gateway IP:     %s\n", portalIP))
 
 		if pid, s := findServiceProcess("hostapd"); s == "running" {
 			out.WriteString(fmt.Sprintf("Service AP:     %s\n", successStyle.Render("RUNNING (PID "+pid+")")))
@@ -191,6 +244,9 @@ func (m model) refreshDashboard() string {
 			out.WriteString(fmt.Sprintf("Service AP:     %s\n", warnStyle.Render("OFFLINE")))
 		}
 	}
+
+	out.WriteString("\n" + subtitleStyle.Render("LIVE FLOW MONITOR") + "\n")
+	out.WriteString(m.drawGraph(40, 5))
 
 	// 2. Get Credentials
 	credsB, err := get("/api/portal/credentials")
@@ -201,8 +257,8 @@ func (m model) refreshDashboard() string {
 		out.WriteString(strings.Repeat("━", m.width-45) + "\n")
 
 		start := 0
-		if len(creds) > 12 {
-			start = len(creds) - 12
+		if len(creds) > 5 {
+			start = len(creds) - 5
 		}
 		for i := len(creds) - 1; i >= start; i-- {
 			c := creds[i]
@@ -211,6 +267,43 @@ func (m model) refreshDashboard() string {
 				subtitleStyle.Render(fmt.Sprint(c["login"])),
 				c["password"],
 				infoStyle.Render(fmt.Sprint(c["ip"]))))
+		}
+	}
+
+	return out.String()
+}
+
+func (m model) refreshTrafficAnalyzer() string {
+	var out strings.Builder
+	out.WriteString(headerStyle.Render(" ADVANCED TRAFFIC ANALYZER ") + "\n\n")
+
+	out.WriteString(subtitleStyle.Render("PACKET THROUGHPUT (PPS)") + "\n")
+	out.WriteString(m.drawGraph(40, 8))
+	out.WriteString("\n")
+
+	b, err := get("/api/traffic?limit=15")
+	if err == nil {
+		var traffic []map[string]interface{}
+		json.Unmarshal(b, &traffic)
+
+		out.WriteString(subtitleStyle.Render("RECENT FLOWS") + "\n")
+		out.WriteString(fmt.Sprintf("%-20s | %-10s | %s\n", "DESTINATION", "PROTO", "INFO"))
+		out.WriteString(strings.Repeat("─", m.width-40) + "\n")
+
+		for _, t := range traffic {
+			dest := fmt.Sprint(t["destination"])
+			if len(dest) > 20 { dest = dest[:17] + "..." }
+			proto := fmt.Sprint(t["protocol"])
+			info := fmt.Sprint(t["info"])
+			if len(info) > 40 { info = info[:37] + "..." }
+
+			protoColor := successStyle
+			if proto == "DNS" { protoColor = subtitleStyle }
+
+			out.WriteString(fmt.Sprintf("%-20s | %s | %s\n",
+				dest,
+				protoColor.Render(fmt.Sprintf("%-10s", proto)),
+				info))
 		}
 	}
 
@@ -236,7 +329,6 @@ func (m model) refreshStatus() string {
 	}
 
 	out.WriteString("\n" + headerStyle.Render(" BACKGROUND JOBS ") + "\n")
-	// Simplified job list
 	for _, service := range []string{"hostapd", "dnsmasq", "ap1_core"} {
 		pid, status := findServiceProcess(service)
 		statusStr := warnStyle.Render("STOPPED")
@@ -259,27 +351,6 @@ func (m model) refreshModules() string {
 		enabled := warnStyle.Render("NO")
 		if p["enabled"].(bool) { enabled = successStyle.Render("YES") }
 		out.WriteString(fmt.Sprintf(" [%s] %-15s | %s\n", enabled, p["name"], p["description"]))
-	}
-	return out.String()
-}
-
-func (m model) refreshLogs() string {
-	var out strings.Builder
-	out.WriteString(headerStyle.Render(" LIVE TRAFFIC LOGS ") + "\n\n")
-
-	// Just read credentials log for now in TUI
-	data, err := os.ReadFile("../system/runtime/portal_credentials.log")
-	if err != nil {
-		return "Waiting for logs..."
-	}
-	lines := strings.Split(string(data), "\n")
-	if len(lines) > 20 {
-		lines = lines[len(lines)-21:]
-	}
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			out.WriteString(line + "\n")
-		}
 	}
 	return out.String()
 }

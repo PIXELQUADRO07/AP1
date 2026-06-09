@@ -750,6 +750,15 @@ func cmdSet(args []string) {
 		runtimeSettings["api"] = value
 		fmt.Println("api set to", value)
 		return
+	case "template":
+		payload := fmt.Sprintf(`{"template":"%s"}`, value)
+		b, err := post("/api/config/set_template", strings.NewReader(payload))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to set template:", err)
+			return
+		}
+		printResponse(b)
+		return
 	case "docker":
 		val := strings.ToLower(value)
 		dockerMode = val == "on" || val == "1" || val == "true"

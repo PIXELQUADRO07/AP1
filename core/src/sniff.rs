@@ -79,13 +79,31 @@ fn handle_udp_packet(ip_packet: &Ipv4Packet, udp_packet: &UdpPacket) {
     let destination = format!("{}:{}", ip_packet.get_destination(), udp_packet.get_destination());
 
     // DNS detection (Port 53)
-    if udp_packet.get_destination() == 53 {
+    if udp_packet.get_destination() == 53 || udp_packet.get_source() == 53 {
         let payload = udp_packet.payload();
-        // DNS parsing is complex, let's just log that it's a query for now
-        // A more advanced version would parse the DNS question
         if payload.len() > 12 {
-            // Simplified: log the event. Real DNS parsing would go here.
-            database::log_traffic(&source, &destination, "DNS", "Query detected");
+            // DNS header is 12 bytes.
+            // Simple check for QNAME: starts at 13th byte (index 12)
+            let qname = parse_dns_qname(&payload[12..]);
+            if !qname.is_empty() {
+                database::log_traffic(&source, &destination, "DNS", &format!("Query: {}", qname));
+            } else {
+                database::log_traffic(&source, &destination, "DNS", "Query detected");
+            }
         }
     }
+}
+
+fn parse_dns_qname(payload: &[u8]) -> String {
+    let mut qname = String::new();
+    let mut i = 0;
+    while i < payload.len() {
+        let len = payload[i] as usize;
+        if len == 0 { break; }
+        if i + 1 + len > payload.len() { break; }
+        if !qname.is_empty() { qname.push('.'); }
+        qname.push_str(&String::from_utf8_lossy(&payload[i+1..i+1+len]));
+        i += 1 + len;
+    }
+    qname
 }

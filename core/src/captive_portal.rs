@@ -41,30 +41,55 @@ impl Default for PortalConfig {
 struct PortalState {
     running: AtomicBool,
     thread: Mutex<Option<thread::JoinHandle<()>>>,
-    tera: OnceLock<Tera>,
+    tera: Mutex<Option<Tera>>,
+    template_dir: Mutex<String>,
 }
 
 static PORTAL_STATE: OnceLock<PortalState> = OnceLock::new();
 
 fn portal_state() -> &'static PortalState {
-    PORTAL_STATE.get_or_init(|| PortalState {
-        running: AtomicBool::new(false),
-        thread: Mutex::new(None),
-        tera: OnceLock::new(),
+    PORTAL_STATE.get_or_init(|| {
+        let default_dir = std::env::var("AP1_PORTAL_TEMPLATE_DIR")
+            .unwrap_or_else(|_| "../config/templates".to_string());
+        PortalState {
+            running: AtomicBool::new(false),
+            thread: Mutex::new(None),
+            tera: Mutex::new(None),
+            template_dir: Mutex::new(default_dir),
+        }
     })
 }
 
-fn get_tera(template_dir: &str) -> &Tera {
-    portal_state().tera.get_or_init(|| {
-        let path = format!("{}/**/*.html", template_dir);
-        match Tera::new(&path) {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("Tera construction error: {}", e);
-                Tera::default()
-            }
+pub fn update_template_dir(new_dir: &str) {
+    let state = portal_state();
+    let mut dir = state.template_dir.lock().unwrap();
+    *dir = new_dir.to_string();
+    // Invalidate Tera cache
+    let mut tera = state.tera.lock().unwrap();
+    *tera = None;
+    println!("Portal template directory updated to: {}", new_dir);
+}
+
+fn get_tera() -> Tera {
+    let state = portal_state();
+    let mut tera_lock = state.tera.lock().unwrap();
+
+    if let Some(t) = &*tera_lock {
+        return t.clone();
+    }
+
+    let dir = state.template_dir.lock().unwrap();
+    let path = format!("{}/**/*.html", *dir);
+    match Tera::new(&path) {
+        Ok(t) => {
+            *tera_lock = Some(t.clone());
+            t
         }
-    })
+        Err(e) => {
+            eprintln!("Tera construction error for {}: {}", path, e);
+            Tera::default()
+        }
+    }
 }
 
 fn build_response(body: &str) -> String {
@@ -76,7 +101,7 @@ fn build_response(body: &str) -> String {
 }
 
 fn render_page(template_name: &str, cfg: &PortalConfig, context_data: HashMap<&str, String>) -> String {
-    let tera = get_tera(&cfg.template_dir);
+    let tera = get_tera();
     let mut context = Context::new();
     for (k, v) in context_data {
         context.insert(k, &v);

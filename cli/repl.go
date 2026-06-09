@@ -33,6 +33,7 @@ func startREPL() {
 			readline.PcItem("channel"),
 			readline.PcItem("password"),
 			readline.PcItem("security"),
+			readline.PcItem("template"),
 			readline.PcItem("api"),
 			readline.PcItem("docker"),
 		),
