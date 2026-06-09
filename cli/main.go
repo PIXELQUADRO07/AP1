@@ -221,116 +221,6 @@ var runtimeSettings = map[string]string{"api": defaultAPIBase}
 var ignoredLoggers = map[string]bool{}
 var currentModule = ""
 
-var banners = []string{
-	`
-              .........
-            .'------.' |       Plug and Play
-           | .-----. | |
-           | |     | | |
-         __| |     | | |;. _______________
-        /  |*` + "`" + `-----'.|.' ` + "`" + `;              //
-       /   ` + "`" + `---------' .;'              //
- /|   /  .''''////////;'               //
-|=|  .../ ######### /;/               //|
-|/  /  / ######### //                //||
-   /   ` + "`" + `-----------'                // ||
-  /________________________________//| ||
-  ` + "`" + `--------------------------------' | ||
-   : | ||      | || |__LL__|| ||     | ||
-   : | ||      | ||         | ||     ` + "`" + `""'
-   n | ||      ` + "`" + `""'         | ||
-   M | ||                   | ||
-     | ||                   | ||
-     ` + "`" + `""'                   ` + "`" + `""'
-`,
-	`
-                                     ...
-                                        `.
-                                  ..
-                                    `.
-                            `.        `.
-                         ___` + "`" + `.\.//
-                            ` + "`" + `---.---
-                           /     \.--
-                          /       \-
-                         |   /\    \
-                         |\==/\==/  |
-                         | ` + "`" + `@'` + "`" + `@'  .--.
-                  .--------.           )
-                .'             .   ` + "`" + `._/
-               /               |     \
-              .               /       |
-              |              /        |
-              |            .'         |   .--.
-             .'`.        .'_          |  /    \
-           .'    ` + "`" + `.__.--'.--` + "`" + `.       / .'      |
-         .'            .|    \\     |_/        |
-       .'            .' |     \\               |
-     .-` + "`" + `.           /   |      .      __       |
-   .'    `.     \   |   ` + "`" + `           .'  )      \
-  /        \   / \  |            .-'   /       |
- (  /       \ /   \ |                 |        |
-  \/         (     \/                 |        |
-  (  /        )    /                 /   _.----|
-   \/   //   /   .'                  |.-'       ` + "`" + `
-   (   /(   /   /                    /      `.   |
-    ` + "`" + `.(  `-')  .---.                |    `.   ` + "`" + `._/
-       ` + "`" + `._.'  /     `.   .---.      |  .   ` + "`" + `._.'
-              |       \ /     `.     \  ` + "`" + `.___.'
-              |        Y        `.    ` + "`" + `.___.'
-              |      . |          \         \
-              |       ` + "`" + `|           \         |
-              |        |       .    \        |
-              |        |        \    \       |
-`,
-}
-var startBanners = []string{
-	`
-#  .+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.
-# (        _           ____         _       )
-#  )      / \         |  _ \       / |     (
-# (      / _ \        | |_) |      | |      )
-#  )    / ___ \       |  __/       | |     (
-# (    /_/   \_\      |_|          |_|      )
-#  )                                       (
-# (                                         )
-#  "+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"
-`,
-}
-var interactiveBanners = []string{
-	`
-                     ,---.           ,---.
-                    / /"` + "`" + `.\.--"""--./,'"\ \
-                    \ \    _       _    / /
-                     ` + "`" + `./  / __   __ \  \,'
-                      /    /_O)_(_O\    \
-                      |  .-'  ___  ` + "`" + `-.  |
-                   .--|       \_/       |--.
-                 ,'    \   \   |   /   /    `.
-                /       `.  ` + "`" + `--^--'  ,'       \
-             .-"""""-.    ` + "`" + `--.___.--'     .-"""""-.
-.-----------/         \------------------/         \--------------.
-| .---------\         /----------------- \         /------------. |
-| |          ` + "`" + `-` + "`" + `--` + "`" + `--'                    ` + "`" + `--'--'-'             | |
-| |                                                             | |
-| |        WELCOME TO AP1 INTERACTIVE CONSOLE                   | |
-| |_____________________________________________________________| |
-|_________________________________________________________________|
-                   )__________|__|__________(
-                  |            ||            |
-                  |____________||____________|
-                    ),-----.(      ),-----.(
-                  ,'   ==.   \    /  .==    `.
-                 /            )  (            \
-                 ` + "`" + `==========='    ` + "`" + `==========='
-`,
-}
-var bannerTaglines = []string{
-	"edge-aware captive portal orchestrator",
-	"network trickery with a friendly face",
-	"AP management for modern pentesting",
-	"control APs, portals and payloads",
-}
 
 func doRequest(method, path string, body io.Reader) ([]byte, error) {
 	if dockerMode {
@@ -1787,7 +1677,7 @@ func showBanner(mode string) {
 	} else {
 		tagline = randomTagline()
 	}
-	fmt.Println(colorText(ansiGreen, ansiBold+"AP1 - "+tagline+ansiReset))
+	printWithBorder("AP1 - " + tagline)
 	fmt.Println()
 }
 
@@ -1808,12 +1698,10 @@ func cmdExit() {
 
 func usage() {
 	showBanner("")
-	fmt.Println(colorText(ansiYellow, "[*] Available Commands:"))
-	fmt.Println("=======================")
+	printSection("Available Commands")
 	fmt.Println()
 
-	fmt.Println(colorText(ansiCyan, "Core Commands:"))
-	fmt.Println("==============")
+	printSection("Core Commands")
 	fmt.Printf("%-12s %s\n", "Command", "Description")
 	fmt.Printf("%-12s %s\n", "-------", "-----------")
 	printCmd("banner", "display an awesome AP1 banner")
@@ -1832,8 +1720,7 @@ func usage() {
 	printCmd("status", "show API/core status")
 	fmt.Println()
 
-	fmt.Println(colorText(ansiCyan, "Ap Commands:"))
-	fmt.Println("============")
+	printSection("Ap Commands")
 	fmt.Printf("%-12s %s\n", "Command", "Description")
 	fmt.Printf("%-12s %s\n", "-------", "-----------")
 	printCmd("ap", "show all variable and status from AP")
@@ -1846,8 +1733,7 @@ func usage() {
 	printCmd("profiles", "manage AP profiles (list, select, create, delete)")
 	fmt.Println()
 
-	fmt.Println(colorText(ansiCyan, "Network Commands:"))
-	fmt.Println("=================")
+	printSection("Network Commands")
 	fmt.Printf("%-12s %s\n", "Command", "Description")
 	fmt.Printf("%-12s %s\n", "-------", "-----------")
 	printCmd("plugins", "show all available plugins")
@@ -1862,13 +1748,13 @@ func usage() {
 	printCmd("interface", "configure network interfaces")
 	fmt.Println()
 
-	fmt.Println(colorText(ansiYellow, "Presets:"))
+	printSection("Presets")
 	fmt.Println("  open_nav      - Open AP with real internet and sniffing")
 	fmt.Println("  google_phish  - AP with Google phishing template")
 	fmt.Println("  router_attack - AP with Router Login template")
 	fmt.Println()
 
-	fmt.Println(colorText(ansiYellow, "Environment:"))
+	printSection("Environment")
 	fmt.Println("  AP1_API_URL                 API server URL")
 	fmt.Println("  AP1_API_TOKEN               API authentication token")
 	fmt.Println("  AP1_USE_DOCKER              Use docker compose exec for requests")
