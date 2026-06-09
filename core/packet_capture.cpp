@@ -52,6 +52,12 @@ extern "C" int start_packet_capture(const char* iface, const char* log_path) {
             std::cerr << "Warning: Could not set promiscuous mode\n";
         }
 
+        // Set timeout for recv to allow graceful shutdown
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
         struct sockaddr_ll saddr;
         std::memset(&saddr, 0, sizeof(saddr));
         saddr.sll_family = AF_PACKET;

@@ -10,6 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -163,6 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/config/set_interface", post(set_interface_handler))
         .route("/api/config/set_template", post(set_template_handler))
         .route("/api/config/update", post(config_update_handler))
+        .route("/api/config/reset", post(config_reset_handler))
         .route("/api/config/preset", post(config_preset_handler))
         .route("/api/recon/networks", get(recon_networks_handler))
         .route("/api/recon/congestion", get(recon_congestion_handler))
@@ -383,6 +385,59 @@ async fn config_update_handler(State(state): State<Arc<AppState>>, Json(json_bod
     Json(serde_json::json!({"status": "config updated"}))
 }
 
+async fn config_reset_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let default_config = AppConfig {
+        app: crate::config::AppInfo {
+            name: "AP1".to_string(),
+            environment: "development".to_string(),
+            api_url: "http://127.0.0.1:8001".to_string(),
+            core_url: "http://127.0.0.1:8081".to_string(),
+        },
+        network: crate::config::NetworkConfig {
+            default_interface: "wlan0".to_string(),
+            captive_portal: true,
+            template: "DarkLogin".to_string(),
+            portal_ip: "192.168.50.1".to_string(),
+            portal_port: Some(80),
+            portal_fallback_port: Some(8000),
+            dns_ip: "192.168.50.1".to_string(),
+            subnet: Some(24),
+        },
+        logging: crate::config::LoggingConfig {
+            level: "info".to_string(),
+        },
+        active_profile: Some("default".to_string()),
+        profiles: Some(vec![
+            Profile {
+                name: "default".to_string(),
+                ssid: "FreeWifi".to_string(),
+                password: "ap1password".to_string(),
+                channel: 1,
+                mode: "g".to_string(),
+                dhcp_enabled: true,
+                security: Some("open".to_string()),
+            },
+            Profile {
+                name: "guest".to_string(),
+                ssid: "AP1-Guest".to_string(),
+                password: "guestpass".to_string(),
+                channel: 11,
+                mode: "n".to_string(),
+                dhcp_enabled: true,
+                security: Some("wpa2".to_string()),
+            },
+        ]),
+    };
+
+    let mut config = get_app_config().lock().unwrap();
+    *config = default_config.clone();
+
+    match save_config(&state.config_path, &config) {
+        Ok(_) => Json(serde_json::json!({"status": "config reset to factory defaults"})).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err}))).into_response(),
+    }
+}
+
 async fn config_preset_handler(State(state): State<Arc<AppState>>, Json(json_body): Json<serde_json::Value>) -> impl IntoResponse {
     let mut config = get_app_config().lock().unwrap();
     let active_profile_name = config.active_profile.clone().unwrap_or_else(|| "default".to_string());
@@ -427,9 +482,10 @@ async fn config_preset_handler(State(state): State<Arc<AppState>>, Json(json_bod
     }
 }
 
-async fn recon_networks_handler(Query(params): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
-    let _iface = params.get("iface").cloned().unwrap_or_else(|| "wlan0".to_string());
-    Json(serde_json::json!({"status": "ok"}))
+async fn recon_networks_handler(Query(params): Query<HashMap<String, String>>) -> Json<Vec<recon::WiFiNetwork>> {
+    let iface = params.get("iface").cloned().unwrap_or_else(|| "wlan0".to_string());
+    let networks = recon::scan_targets(&iface);
+    Json(networks)
 }
 
 async fn recon_congestion_handler() -> Json<serde_json::Value> {

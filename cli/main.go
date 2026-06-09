@@ -158,11 +158,15 @@ func printWithBorder(text string) {
 	fmt.Println(colorText(ansiCyan, borderTop))
 
 	width := 61
-	lines := wrapText(text, width)
-	for _, line := range lines {
-		padding := (width - len(line)) / 2
-		paddedLine := strings.Repeat(" ", padding) + line + strings.Repeat(" ", width-len(line)-padding)
-		fmt.Printf(colorText(ansiCyan, "| |") + "  %s  " + colorText(ansiCyan, "| |") + "\n", paddedLine)
+	// Split by newline first to preserve manual formatting
+	rawLines := strings.Split(text, "\n")
+	for _, rawLine := range rawLines {
+		wrapped := wrapText(rawLine, width)
+		for _, line := range wrapped {
+			// Left align with a small margin
+			paddedLine := " " + line + strings.Repeat(" ", width-len(line)-1)
+			fmt.Printf(colorText(ansiCyan, "| |") + " %s " + colorText(ansiCyan, "| |") + "\n", paddedLine)
+		}
 	}
 
 	fmt.Println(colorText(ansiCyan, borderBottom))
@@ -222,6 +226,10 @@ var ignoredLoggers = map[string]bool{}
 var currentModule = ""
 
 
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
+
 func doRequest(method, path string, body io.Reader) ([]byte, error) {
 	if dockerMode {
 		var payload []byte
@@ -248,7 +256,7 @@ func doRequest(method, path string, body io.Reader) ([]byte, error) {
 		req.Header.Set("X-API-Token", token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +334,67 @@ func cmdStatus() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(b, &parsed); err != nil {
+		printResponse(b)
+		return
+	}
+
+	// Format status nicely for the border
+	var sb strings.Builder
+	sb.WriteString("AP1 CORE STATUS\n")
+	sb.WriteString(strings.Repeat("-", 15) + "\n")
+	if v, ok := parsed["service"]; ok {
+		sb.WriteString(fmt.Sprintf("Service: %v\n", v))
+	}
+	if v, ok := parsed["version"]; ok {
+		sb.WriteString(fmt.Sprintf("Version: %v\n", v))
+	}
+
+	if cfg, ok := parsed["config"].(map[string]interface{}); ok {
+		sb.WriteString("\nConfiguration:\n")
+		if active, ok := cfg["active_profile"]; ok {
+			sb.WriteString(fmt.Sprintf("  Active Profile: %v\n", active))
+		}
+		if net, ok := cfg["network"].(map[string]interface{}); ok {
+			sb.WriteString(fmt.Sprintf("  Interface     : %v\n", net["default_interface"]))
+			sb.WriteString(fmt.Sprintf("  Portal IP     : %v\n", net["portal_ip"]))
+			sb.WriteString(fmt.Sprintf("  Captive Portal: %v\n", net["captive_portal"]))
+		}
+	}
+
+	if plugins, ok := parsed["plugins"].([]interface{}); ok {
+		sb.WriteString(fmt.Sprintf("\nPlugins Enabled: %d\n", len(plugins)))
+		for _, p := range plugins {
+			if pm, ok := p.(map[string]interface{}); ok {
+				if enabled, ok := pm["enabled"].(bool); ok && enabled {
+					sb.WriteString(fmt.Sprintf("  - %v\n", pm["name"]))
+				}
+			}
+		}
+	}
+
+	printWithBorder(sb.String())
+}
+
+func cmdReset(args []string) {
+	fmt.Println(colorText(ansiRed+ansiBold, "[!] WARNING: This will reset all configurations to defaults!"))
+	fmt.Print("Are you sure? (y/N): ")
+	var confirm string
+	fmt.Scanln(&confirm)
+	if strings.ToLower(confirm) != "y" {
+		fmt.Println("Reset aborted.")
+		return
+	}
+
+	b, err := post("/api/config/reset", nil)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "reset failed:", err)
+		return
+	}
 	printResponse(b)
+	fmt.Println(colorText(ansiGreen, "[+] System reset successful. Please restart the CLI."))
 }
 
 func loadProfileList() ([]map[string]interface{}, error) {
@@ -1810,6 +1878,7 @@ func usage() {
 	printCmd("unset", "unset variable command")
 	printCmd("use", "select module for modules")
 	printCmd("status", "show API/core status")
+	printCmd("reset", "reset all configurations to factory defaults")
 	fmt.Println()
 
 	printSection("Ap Commands")
@@ -2079,6 +2148,8 @@ func handleGlobalCommand(cmd string, args []string) {
 		cmdExit()
 	case "status":
 		cmdStatus()
+	case "reset":
+		cmdReset(args)
 	case "health":
 		cmdHealth()
 	case "config":

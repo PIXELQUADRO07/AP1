@@ -77,6 +77,7 @@ func startREPL() {
 		),
 		readline.PcItem("search"),
 		readline.PcItem("use"),
+		readline.PcItem("reset"),
 		readline.PcItem("dump",
 			readline.PcItem("credentials"),
 		),

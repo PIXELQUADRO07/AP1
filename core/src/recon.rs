@@ -1,9 +1,10 @@
 //! Recon module for scanning and target identification.
 
 use std::process::Command;
+use serde::Serialize;
 use crate::config::Profile;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WiFiNetwork {
     pub ssid: String,
     pub bssid: String,

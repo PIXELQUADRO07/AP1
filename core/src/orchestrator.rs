@@ -39,6 +39,7 @@ pub fn start_ap_session(iface: &str, profile: &Profile, portal_cfg: &PortalConfi
     hostapd::write_hostapd_config(&hostapd_conf, "../system/runtime/hostapd.conf")?;
 
     // 2. Unified DNS + DHCP Config
+    // ... (rest of dnsmasq config generation)
     let mut dnsmasq_conf = format!(
         "interface={}\nbind-interfaces\nserver=8.8.8.8\nlog-queries\nlog-dhcp\n",
         iface
@@ -64,21 +65,21 @@ pub fn start_ap_session(iface: &str, profile: &Profile, portal_cfg: &PortalConfi
 
     fs::write("../system/runtime/dnsmasq.conf", dnsmasq_conf).map_err(|e| e.to_string())?;
 
-    // 4. Configura l'interfaccia
-    if let Err(e) = system_control::configure_interface(iface, &portal_cfg.portal_ip, "24") {
-        return Err(format!("Step 4 failed: {}", e));
-    }
-
-    // 5. Avvia hostapd
+    // 3. Avvia hostapd (PRIMO)
     if let Err(e) = hostapd::start_hostapd() {
-        let _ = stop_ap_session(iface, portal_cfg);
-        return Err(format!("Step 5 failed: {}", e));
+        return Err(format!("Step 3 failed: {}", e));
     }
 
     // Wait a bit for the interface to be ready in Master mode
     std::thread::sleep(std::time::Duration::from_millis(1500));
 
-    // 6. Avvia dnsmasq
+    // 4. Configura l'interfaccia (DOPO hostapd)
+    if let Err(e) = system_control::configure_interface(iface, &portal_cfg.portal_ip, "24") {
+        let _ = stop_ap_session(iface, portal_cfg);
+        return Err(format!("Step 4 failed: {}", e));
+    }
+
+    // 5. Avvia dnsmasq
     let _ = std::process::Command::new("pkill").arg("-x").arg("dnsmasq").output();
 
     let dnsmasq_log_path = "../system/runtime/logs/dnsmasq.log";
@@ -94,9 +95,18 @@ pub fn start_ap_session(iface: &str, profile: &Profile, portal_cfg: &PortalConfi
         .stderr(dnsmasq_log)
         .spawn();
 
-    if dnsmasq_status.is_err() {
+    if let Err(e) = dnsmasq_status {
         let _ = stop_ap_session(iface, portal_cfg);
-        return Err("Step 6 failed: Failed to start dnsmasq".to_string());
+        return Err(format!("Step 5 failed: Failed to spawn dnsmasq: {}", e));
+    }
+
+    // Check if dnsmasq is actually running
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let dnsmasq_pid = std::process::Command::new("pgrep").arg("-x").arg("dnsmasq").output();
+    if dnsmasq_pid.is_err() || !dnsmasq_pid.unwrap().status.success() {
+        let error_msg = fs::read_to_string("../system/runtime/logs/dnsmasq.log").unwrap_or_default();
+        let _ = stop_ap_session(iface, portal_cfg);
+        return Err(format!("Step 5 failed: dnsmasq failed to start. Log: {}", error_msg));
     }
 
     // 7. Applica iptables - Redirect only if portal is enabled
