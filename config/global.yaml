@@ -18,6 +18,7 @@ active_profile: default
 profiles:
 - name: default
   ssid: Free_Internet
+  bssid: null
   password: ap1password
   channel: 1
   mode: g
@@ -25,6 +26,7 @@ profiles:
   security: open
 - name: guest
   ssid: AP1-Guest
+  bssid: null
   password: guestpass
   channel: 11
   mode: n
