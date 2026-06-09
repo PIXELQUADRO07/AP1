@@ -25,6 +25,8 @@
 *.tmp
 *.temp
 *.pid
+ap1-cli
+set
 
 # Python
 __pycache__/
