@@ -31,3 +31,13 @@ profiles:
       mode: "n"
       dhcp_enabled: true
       security: ""
+
+auth:
+    enabled: false
+    default_role: viewer
+    access_token_ttl: 600
+    refresh_token_ttl: 86400
+    users:
+      - username: admin
+        password: ap1password
+        role: admin

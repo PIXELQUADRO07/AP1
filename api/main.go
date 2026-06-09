@@ -67,10 +67,14 @@ func main() {
 	var configPath string
 	var pluginConfigPath string
 	var addr string
+	var tlsCert string
+	var tlsKey string
 
 	flag.StringVar(&configPath, "config", "", "Path to global YAML config")
 	flag.StringVar(&pluginConfigPath, "plugins", "", "Path to plugin YAML config")
 	flag.StringVar(&addr, "addr", "", "Listen address for the API server")
+	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file")
+	flag.StringVar(&tlsKey, "tls-key", "", "Path to TLS private key file")
 	flag.Parse()
 
 	if configPath == "" {
@@ -140,5 +144,12 @@ func main() {
 	log.Printf("Starting AP1 API server on %s", addr)
 	log.Printf("Using config: %s", configPath)
 	log.Printf("Using plugin config: %s", pluginConfigPath)
+	if tlsCert != "" || tlsKey != "" {
+		if tlsCert == "" || tlsKey == "" {
+			log.Fatal("both --tls-cert and --tls-key are required when using HTTPS")
+		}
+		log.Printf("Starting AP1 API server with TLS on %s", addr)
+		log.Fatal(http.ListenAndServeTLS(addr, tlsCert, tlsKey, router))
+	}
 	log.Fatal(http.ListenAndServe(addr, router))
 }
