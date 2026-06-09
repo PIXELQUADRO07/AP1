@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 
 type menuItem string
 
-func (m menuItem) Title() string       { return string(m) }
+func (m menuItem) Title() string { return string(m) }
 func (m menuItem) Description() string {
 	switch string(m) {
 	case "Dashboard":
@@ -40,15 +40,15 @@ func (m menuItem) FilterValue() string { return string(m) }
 type tickMsg time.Time
 
 type model struct {
-	list          list.Model
-	viewport      viewport.Model
-	content       string
-	err           error
-	ready         bool
-	width         int
-	height        int
-	trafficData   []int
-	maxTraffic    int
+	list        list.Model
+	viewport    viewport.Model
+	content     string
+	err         error
+	ready       bool
+	width       int
+	height      int
+	trafficData []int
+	maxTraffic  int
 }
 
 var (
@@ -60,6 +60,7 @@ var (
 	footerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#b0b0b0")).Italic(true)
 	successStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff00"))
 	warnStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffff00"))
+	infoStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#9090ff"))
 	graphStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff87"))
 )
 
@@ -197,11 +198,10 @@ func (m *model) updateTrafficStats() {
 }
 
 func (m model) drawGraph(width int, height int) string {
-	if m.maxTraffic == 0 { m.maxTraffic = 1 }
+	if m.maxTraffic == 0 {
+		m.maxTraffic = 1
+	}
 	var out strings.Builder
-
-	// ASCII characters for levels
-	runes := []string{" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
 
 	for h := height; h > 0; h-- {
 		for i := 0; i < len(m.trafficData); i++ {
@@ -217,13 +217,29 @@ func (m model) drawGraph(width int, height int) string {
 	}
 
 	// Bottom line
-	out.WriteString(strings.Repeat("━", len(m.trafficData)) + "\n")
+	out.WriteString(strings.Repeat("━", len(m.trafficData)))
+	out.WriteString("\n")
 	return out.String()
+}
+
+func fetchPrettyJSON(path string) string {
+	b, err := get(path)
+	if err != nil {
+		return fmt.Sprintf("Error fetching %s: %v", path, err)
+	}
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, b, "", "  "); err != nil {
+		return string(b)
+	}
+
+	return pretty.String()
 }
 
 func (m model) refreshDashboard() string {
 	var out strings.Builder
-	out.WriteString(headerStyle.Render(" NETWORK ORCHESTRATOR DASHBOARD ") + "\n\n")
+	out.WriteString(headerStyle.Render(" NETWORK ORCHESTRATOR DASHBOARD "))
+	out.WriteString("\n\n")
 
 	// 1. Get Portal Status
 	statusB, err := get("/api/status")
@@ -245,7 +261,9 @@ func (m model) refreshDashboard() string {
 		}
 	}
 
-	out.WriteString("\n" + subtitleStyle.Render("LIVE FLOW MONITOR") + "\n")
+	out.WriteString("\n")
+	out.WriteString(subtitleStyle.Render("LIVE FLOW MONITOR"))
+	out.WriteString("\n")
 	out.WriteString(m.drawGraph(40, 5))
 
 	// 2. Get Credentials
@@ -254,7 +272,8 @@ func (m model) refreshDashboard() string {
 		var creds []map[string]interface{}
 		json.Unmarshal(credsB, &creds)
 		out.WriteString(fmt.Sprintf("\nCaptured Events (%d):\n", len(creds)))
-		out.WriteString(strings.Repeat("━", m.width-45) + "\n")
+		out.WriteString(strings.Repeat("━", m.width-45))
+		out.WriteString("\n")
 
 		start := 0
 		if len(creds) > 5 {
@@ -275,9 +294,11 @@ func (m model) refreshDashboard() string {
 
 func (m model) refreshTrafficAnalyzer() string {
 	var out strings.Builder
-	out.WriteString(headerStyle.Render(" ADVANCED TRAFFIC ANALYZER ") + "\n\n")
+	out.WriteString(headerStyle.Render(" ADVANCED TRAFFIC ANALYZER "))
+	out.WriteString("\n\n")
 
-	out.WriteString(subtitleStyle.Render("PACKET THROUGHPUT (PPS)") + "\n")
+	out.WriteString(subtitleStyle.Render("PACKET THROUGHPUT (PPS)"))
+	out.WriteString("\n")
 	out.WriteString(m.drawGraph(40, 8))
 	out.WriteString("\n")
 
@@ -286,19 +307,27 @@ func (m model) refreshTrafficAnalyzer() string {
 		var traffic []map[string]interface{}
 		json.Unmarshal(b, &traffic)
 
-		out.WriteString(subtitleStyle.Render("RECENT FLOWS") + "\n")
+		out.WriteString(subtitleStyle.Render("RECENT FLOWS"))
+		out.WriteString("\n")
 		out.WriteString(fmt.Sprintf("%-20s | %-10s | %s\n", "DESTINATION", "PROTO", "INFO"))
-		out.WriteString(strings.Repeat("─", m.width-40) + "\n")
+		out.WriteString(strings.Repeat("─", m.width-40))
+		out.WriteString("\n")
 
 		for _, t := range traffic {
 			dest := fmt.Sprint(t["destination"])
-			if len(dest) > 20 { dest = dest[:17] + "..." }
+			if len(dest) > 20 {
+				dest = dest[:17] + "..."
+			}
 			proto := fmt.Sprint(t["protocol"])
 			info := fmt.Sprint(t["info"])
-			if len(info) > 40 { info = info[:37] + "..." }
+			if len(info) > 40 {
+				info = info[:37] + "..."
+			}
 
 			protoColor := successStyle
-			if proto == "DNS" { protoColor = subtitleStyle }
+			if proto == "DNS" {
+				protoColor = subtitleStyle
+			}
 
 			out.WriteString(fmt.Sprintf("%-20s | %s | %s\n",
 				dest,
@@ -312,7 +341,8 @@ func (m model) refreshTrafficAnalyzer() string {
 
 func (m model) refreshStatus() string {
 	var out strings.Builder
-	out.WriteString(headerStyle.Render(" SYSTEM & INTERFACES ") + "\n\n")
+	out.WriteString(headerStyle.Render(" SYSTEM & INTERFACES "))
+	out.WriteString("\n\n")
 
 	b, err := get("/api/interfaces")
 	if err == nil {
@@ -328,7 +358,9 @@ func (m model) refreshStatus() string {
 		}
 	}
 
-	out.WriteString("\n" + headerStyle.Render(" BACKGROUND JOBS ") + "\n")
+	out.WriteString("\n")
+	out.WriteString(headerStyle.Render(" BACKGROUND JOBS "))
+	out.WriteString("\n")
 	for _, service := range []string{"hostapd", "dnsmasq", "ap1_core"} {
 		pid, status := findServiceProcess(service)
 		statusStr := warnStyle.Render("STOPPED")
@@ -343,13 +375,16 @@ func (m model) refreshStatus() string {
 
 func (m model) refreshModules() string {
 	var out strings.Builder
-	out.WriteString(headerStyle.Render(" ACTIVE PLUGINS ") + "\n")
+	out.WriteString(headerStyle.Render(" ACTIVE PLUGINS "))
+	out.WriteString("\n")
 	b, _ := get("/api/plugins")
 	var plugins []map[string]interface{}
 	json.Unmarshal(b, &plugins)
 	for _, p := range plugins {
 		enabled := warnStyle.Render("NO")
-		if p["enabled"].(bool) { enabled = successStyle.Render("YES") }
+		if p["enabled"].(bool) {
+			enabled = successStyle.Render("YES")
+		}
 		out.WriteString(fmt.Sprintf(" [%s] %-15s | %s\n", enabled, p["name"], p["description"]))
 	}
 	return out.String()
