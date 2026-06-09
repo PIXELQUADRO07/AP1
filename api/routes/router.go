@@ -22,6 +22,7 @@ func NewRouter(coreURL string, cfg *services.Config, configPath, pluginConfigPat
 	mux.HandleFunc("/api/config/set_interface", middleware.TokenAuth(token, handlers.SetInterfaceHandler(cfg, coreURL)))
 	mux.HandleFunc("/api/config/update", middleware.TokenAuth(token, handlers.UpdateConfigHandler(cfg, coreURL)))
 	mux.HandleFunc("/api/config/preset", middleware.TokenAuth(token, handlers.PresetConfigHandler(cfg, coreURL)))
+	mux.HandleFunc("/api/config/reset", middleware.TokenAuth(token, handlers.ResetConfigHandler(cfg, coreURL)))
 	mux.HandleFunc("/api/profiles", handlers.ProfilesHandler(cfg))
 	mux.HandleFunc("/api/profiles/create", middleware.TokenAuth(token, handlers.CreateProfileHandler(cfg, configPath)))
 	mux.HandleFunc("/api/profiles/update", middleware.TokenAuth(token, handlers.UpdateProfileHandler(cfg, configPath)))

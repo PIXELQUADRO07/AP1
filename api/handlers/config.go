@@ -95,3 +95,20 @@ func PresetConfigHandler(cfg *services.Config, coreURL string) http.HandlerFunc 
 		writeCoreResponse(w, resp)
 	}
 }
+
+func ResetConfigHandler(cfg *services.Config, coreURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Update core via proxy
+		resp, err := postToCore(coreURL, "/api/config/reset", nil)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("core error: %v", err), http.StatusInternalServerError)
+			return
+		}
+		writeCoreResponse(w, resp)
+	}
+}

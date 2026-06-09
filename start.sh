@@ -23,7 +23,19 @@ fi
 
 mkdir -p "$BIN_DIR" "$LOG_DIR"
 
-echo -e "${CYAN}[*] AP1 - Edge-Aware Captive Portal Orchestrator${NC}"
+echo -e "${CYAN}"
+cat << "EOF"
+ .+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.
+(        _           ____         _       )
+ )      / \         |  _ \       / |     (
+(      / _ \        | |_) |      | |      )
+ )    / ___ \       |  __/       | |     (
+(    /_/   \_\      |_|          |_|      )
+ )                                       (
+(                                         )
+ "+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"
+EOF
+echo -e "      AP1 - Edge-Aware Orchestrator${NC}\n"
 
 # 1. Build Phase (Conditional & Silent)
 if [ "$REBUILD" = true ] || [ ! -f "$CORE_BIN" ] || [ ! -f "$API_BIN" ]; then

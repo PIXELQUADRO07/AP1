@@ -106,9 +106,19 @@ trap cleanup EXIT INT TERM
 
 # Main
 clear
-echo -e "${CYAN}┌────────────────────────────────────────────────────────┐"
-echo -e "│                AP1 - ROGUE AP ORCHESTRATOR             │"
-echo -e "└────────────────────────────────────────────────────────┘${NC}"
+echo -e "${CYAN}"
+cat << "EOF"
+ .+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.
+(        _           ____         _       )
+ )      / \         |  _ \       / |     (
+(      / _ \        | |_) |      | |      )
+ )    / ___ \       |  __/       | |     (
+(    /_/   \_\      |_|          |_|      )
+ )                                       (
+(                                         )
+ "+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"+.+"
+EOF
+echo -e "      AP1 - Rogue AP Orchestrator${NC}\n"
 echo -e "${GREEN}[*] Target Interface: $SELECTED_IFACE${NC}"
 
 build_if_needed "$@"
