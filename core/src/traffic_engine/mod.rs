@@ -2,7 +2,7 @@
 //!
 //! Gestisce la logica di routing interno e proxy dei pacchetti.
 
-use crate::system_control::{apply_firewall_rules, clear_firewall_rules};
+use crate::system_control::{apply_firewall_rules, apply_nat_rules, clear_firewall_rules};
 
 pub fn start_traffic_engine(iface: &str, portal_ip: &str) {
     let iface = if iface.is_empty() { "wlan0" } else { iface };
@@ -14,18 +14,17 @@ pub fn start_traffic_engine(iface: &str, portal_ip: &str) {
     }
 }
 
-pub fn configure_nat(iface: &str, portal_ip: &str) {
+pub fn configure_nat(iface: &str) {
     let iface = if iface.is_empty() { "wlan0" } else { iface };
-    let portal_ip = if portal_ip.is_empty() { "192.168.50.1" } else { portal_ip };
-    if let Err(err) = apply_firewall_rules(iface, portal_ip) {
+    if let Err(err) = apply_nat_rules(iface) {
         eprintln!("failed to configure NAT: {}", err);
     } else {
-        println!("NAT rules applied for {} -> {}", iface, portal_ip);
+        println!("NAT rules applied for {}", iface);
     }
 }
 
-pub fn start_nat(iface: &str, portal_ip: &str) {
-    configure_nat(iface, portal_ip);
+pub fn start_nat(iface: &str) {
+    configure_nat(iface);
 }
 
 pub fn stop_nat(iface: &str) {

@@ -411,6 +411,7 @@ async fn config_reset_handler(State(state): State<Arc<AppState>>) -> impl IntoRe
             Profile {
                 name: "default".to_string(),
                 ssid: "FreeWifi".to_string(),
+                bssid: None,
                 password: "ap1password".to_string(),
                 channel: 1,
                 mode: "g".to_string(),
@@ -420,6 +421,7 @@ async fn config_reset_handler(State(state): State<Arc<AppState>>) -> impl IntoRe
             Profile {
                 name: "guest".to_string(),
                 ssid: "AP1-Guest".to_string(),
+                bssid: None,
                 password: "guestpass".to_string(),
                 channel: 11,
                 mode: "n".to_string(),
@@ -661,6 +663,7 @@ fn get_active_profile(config: &AppConfig) -> Profile {
     Profile {
         name: "default".to_string(),
         ssid: "AP1-Test".to_string(),
+        bssid: None,
         password: "password123".to_string(),
         channel: 1,
         mode: "g".to_string(),

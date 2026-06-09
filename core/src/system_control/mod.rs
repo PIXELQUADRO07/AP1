@@ -89,17 +89,21 @@ pub fn apply_firewall_rules(iface: &str, portal_ip: &str) -> Result<(), String> 
         vec!["-t", "nat", "-A", "AP1_NAT", "-i", iface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", &dest_53],
     ];
 
-    if !wan_iface.is_empty() && wan_iface != iface {
-        let _ = run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]);
-        let _ = run_command("iptables", &["-t", "nat", "-I", "POSTROUTING", "1", "-o", &wan_iface, "-j", "MASQUERADE"]);
-        println!("[*] NAT enabled: {} -> {}", iface, wan_iface);
-    }
-
     for rule in rules.iter() {
         let args: Vec<&str> = rule.iter().copied().collect();
         if let Err(e) = run_command("iptables", &args) {
             eprintln!("warning: iptables rule failed ({}): {}", args.join(" "), e);
         }
+    }
+
+    if !wan_iface.is_empty() && wan_iface != iface {
+        let _ = run_command("iptables", &["-D", "FORWARD", "-i", iface, "-o", &wan_iface, "-j", "ACCEPT"]);
+        let _ = run_command("iptables", &["-D", "FORWARD", "-i", &wan_iface, "-o", iface, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"]);
+        let _ = run_command("iptables", &["-I", "FORWARD", "1", "-i", iface, "-o", &wan_iface, "-j", "ACCEPT"]);
+        let _ = run_command("iptables", &["-I", "FORWARD", "1", "-i", &wan_iface, "-o", iface, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"]);
+        run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]).ok();
+        run_command("iptables", &["-t", "nat", "-I", "POSTROUTING", "1", "-o", &wan_iface, "-j", "MASQUERADE"]).ok();
+        println!("[*] Captive portal NAT enabled: {} -> {}", iface, wan_iface);
     }
 
     Ok(())
@@ -118,6 +122,27 @@ pub fn clear_firewall_rules(iface: &str, _portal_ip: &str) -> Result<(), String>
 
     if !wan_iface.is_empty() {
         let _ = run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]);
+        let _ = run_command("iptables", &["-D", "FORWARD", "-i", iface, "-o", &wan_iface, "-j", "ACCEPT"]);
+        let _ = run_command("iptables", &["-D", "FORWARD", "-i", &wan_iface, "-o", iface, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"]);
+    }
+
+    Ok(())
+}
+
+pub fn apply_nat_rules(iface: &str) -> Result<(), String> {
+    let iface = if iface.is_empty() { "wlan0" } else { iface };
+    let cmd = format!("ip route | grep default | grep -v {} | awk '{{print $5}}' | head -n 1", iface);
+    let wan_iface = run_command("sh", &["-c", &cmd])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if !wan_iface.is_empty() && wan_iface != iface {
+        run_command("iptables", &["-t", "nat", "-D", "POSTROUTING", "-o", &wan_iface, "-j", "MASQUERADE"]).ok();
+        run_command("iptables", &["-t", "nat", "-I", "POSTROUTING", "1", "-o", &wan_iface, "-j", "MASQUERADE"]).map_err(|e| format!("failed to apply NAT: {}", e))?;
+        println!("[*] NAT enabled: {} -> {}", iface, wan_iface);
+    } else {
+        return Err("no WAN interface found for NAT".to_string());
     }
 
     Ok(())

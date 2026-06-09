@@ -55,6 +55,17 @@ __pycache__/
 # Logs
 *.log
 
+# Runtime files
+/system/runtime/
+/system/runtime/*
+/system/runtime/logs/
+*.pid
+*.db
+
+# Build artifacts
+ap1-cli
+ap1-api
+
 # Misc
 *.lock
 .env
@@ -64,5 +75,4 @@ __pycache__/
 *.crt
 npm-debug.log*
 ASCII
-core/target/
 core/target/

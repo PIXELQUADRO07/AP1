@@ -1,23 +1,29 @@
-# AP1 vs WiFi-Pumpkin3
+# AP1 Capabilities
 
-## WiFi-Pumpkin3 (official repo)
+## Captive portal and evil twin features
+
+AP1 is built for captive portal orchestration, DNS spoofing, and rogue AP / evil twin workflows.
 
 Primary stack:
-- Python 3.8+
-- `wifipumpkin3` package
-- `config/` with captive portal, hostapd, dnsmasq templates
-- `setup.py` and `requirements.txt`
-- internal Python plugins and modules
-- `Dockerfile` for container deployment
-- CLI scripts like `wp3`, `captiveflask`, `phishkin3`, `evilqr3`, `sslstrip3`
+- Rust core engine
+- Go API server
+- native CLI
+- plugin system with Rust/WASM support
+- OS wrappers for hostapd, dnsmasq, firewall, and process management
+- Docker containerization with Docker Compose
 
 Detected structure:
-- `.github/`
-- `config/`
-- `wifipumpkin3/`
-- `README.md`, `LICENSE.md`, `CHANGELOG.md`
-
-## AP1 (current project)
+- `core/`
+  - `src/main.rs`
+  - `src/ap_manager/`
+  - `src/traffic_engine/`
+  - `src/proxy/`
+  - `src/system_control/`
+  - `src/utils/`
+- `api/`
+  - `routes/`
+  - `handlers/`
+  - `websocket/`
 
 Primary stack:
 - Rust core engine

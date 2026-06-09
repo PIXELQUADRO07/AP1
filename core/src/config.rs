@@ -29,6 +29,7 @@ pub struct LoggingConfig {
 pub struct Profile {
     pub name: String,
     pub ssid: String,
+    pub bssid: Option<String>,
     pub password: String,
     pub channel: i32,
     pub mode: String,

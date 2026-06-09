@@ -91,6 +91,7 @@ pub fn profile_from_network(net: &WiFiNetwork) -> Profile {
     Profile {
         name: format!("cloned_{}", net.ssid),
         ssid: net.ssid.clone(),
+        bssid: Some(net.bssid.clone()),
         password: "".to_string(), // Evil twins are usually Open to attract victims
         channel: net.channel,
         mode: "g".to_string(),

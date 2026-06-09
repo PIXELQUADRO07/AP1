@@ -211,6 +211,7 @@ docker run -it --privileged -v /etc/ap1:/config ap1:latest
 - **[Configuration Guide](./docs/CONFIGURATION.md)** - Setup and customization
 - **[Plugin Development](./docs/PLUGINS.md)** - Building custom plugins
 - **[API Reference](./docs/API.md)** - Detailed endpoint documentation
+- **[Fake Connection Mode](./docs/fake_connection.md)** - Evil twin / captive portal behavior
 
 ---
 

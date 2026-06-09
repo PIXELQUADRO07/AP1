@@ -25,6 +25,13 @@ if [ "$EUID" -ne 0 ]; then
   exec sudo "$SCRIPT_PATH" "$@"
 fi
 
+COMMAND="${1:-}"
+if [[ "$COMMAND" == "--rebuild" ]]; then
+    REBUILD=true
+    shift
+    COMMAND="${1:-}"
+fi
+
 # 1. Interface Discovery & Validation
 AVAILABLE_IFACES=($(iw dev | awk '$1=="Interface"{print $2}'))
 
@@ -36,27 +43,49 @@ function list_interfaces() {
 }
 
 SELECTED_IFACE=""
-if [[ "${1:-}" != "--rebuild" && -n "${1:-}" ]]; then
-    # User specified an interface
+if [[ -n "${2:-}" ]]; then
     for iface in "${AVAILABLE_IFACES[@]}"; do
-        if [[ "$iface" == "$1" ]]; then
-            SELECTED_IFACE="$1"
+        if [[ "$iface" == "${2:-}" ]]; then
+            SELECTED_IFACE="${2:-}"
             break
         fi
     done
     if [[ -z "$SELECTED_IFACE" ]]; then
-        echo -e "${RED}[!] Error: Interface '$1' not found or is not a Wi-Fi device.${NC}"
+        echo -e "${RED}[!] Error: Interface '${2:-}' not found or is not a Wi-Fi device.${NC}"
         list_interfaces
         exit 1
     fi
 else
-    # Auto-detect first available
     SELECTED_IFACE="${AVAILABLE_IFACES[0]:-}"
     if [ -z "$SELECTED_IFACE" ]; then
         echo -e "${RED}[!] No Wi-Fi interface detected. Please connect a Wi-Fi card.${NC}"
         exit 1
     fi
 fi
+
+function usage() {
+    cat <<EOF
+Usage: $0 <command> [interface]
+
+Commands:
+  start         Build and start AP1 core and API services
+  stop          Stop AP1 core and API services
+  status        Show AP1 core and API service status
+  interactive   Launch the AP1 interactive CLI (starts services if needed)
+  help          Show this help message
+
+Examples:
+  $0 start
+  $0 stop
+  $0 status
+  $0 interactive
+  $0 start wlan0
+EOF
+}
+
+function is_running() {
+    pgrep -f "$1" >/dev/null 2>&1
+}
 
 function build_components() {
     echo -n -e "${YELLOW}[>] Checking/Building AP1 components... ${NC}"
@@ -67,29 +96,73 @@ function build_components() {
 }
 
 function start_services() {
-    pkill -f "ap1_core" || true
-    pkill -f "ap1-api" || true
-
     export AP1_IFACE="$SELECTED_IFACE"
 
-    cd "$ROOT_DIR/core"
-    "$ROOT_DIR/core/target/debug/ap1_core" > "$LOG_DIR/core.log" 2>&1 &
-    CORE_PID=$!
+    if ! is_running "ap1_core"; then
+        echo -n -e "${YELLOW}[>] Starting core service... ${NC}"
+        cd "$ROOT_DIR/core"
+        "$CORE_BIN" > "$LOG_DIR/core.log" 2>&1 &
+        CORE_PID=$!
+        sleep 1
+        if ! ps -p $CORE_PID >/dev/null 2>&1; then
+            echo -e "${RED}Failed${NC}"
+            echo -e "Check $LOG_DIR/core.log for details."
+            exit 1
+        fi
+        echo -e "${GREEN}Started${NC}"
+    else
+        echo -e "${GREEN}[+] Core already running${NC}"
+    fi
 
-    cd "$ROOT_DIR/api"
-    "$ROOT_DIR/bin/ap1-api" -addr ":8001" > "$LOG_DIR/api.log" 2>&1 &
-    API_PID=$!
-
-    cd "$ROOT_DIR"
-
-    sleep 0.8
-    if ! ps -p $CORE_PID > /dev/null; then
-        echo -e "${RED}[!] Core failed to start. Check $LOG_DIR/core.log${NC}"
-        exit 1
+    if ! is_running "ap1-api"; then
+        echo -n -e "${YELLOW}[>] Starting API service... ${NC}"
+        cd "$ROOT_DIR/api"
+        "$API_BIN" -config "$ROOT_DIR/config/global.yaml" -plugins "$ROOT_DIR/config/plugins.yaml" -addr ":8001" > "$LOG_DIR/api.log" 2>&1 &
+        API_PID=$!
+        sleep 1
+        if ! ps -p $API_PID >/dev/null 2>&1; then
+            echo -e "${RED}Failed${NC}"
+            echo -e "Check $LOG_DIR/api.log for details."
+            exit 1
+        fi
+        echo -e "${GREEN}Started${NC}"
+    else
+        echo -e "${GREEN}[+] API already running${NC}"
     fi
 }
 
+function stop_services() {
+    echo -e "${YELLOW}[>] Stopping AP1 services...${NC}"
+    pkill -f "ap1_core" || true
+    pkill -f "ap1-api" || true
+    echo -e "${GREEN}[+] Services stopped${NC}"
+}
+
+function status_services() {
+    echo -e "${CYAN}AP1 service status:${NC}"
+    if is_running "ap1_core"; then
+        echo -e "  ${GREEN}Core is running${NC}"
+    else
+        echo -e "  ${RED}Core is stopped${NC}"
+    fi
+    if is_running "ap1-api"; then
+        echo -e "  ${GREEN}API is running${NC}"
+    else
+        echo -e "  ${RED}API is stopped${NC}"
+    fi
+}
+
+CLEANUP_ON_EXIT=false
+
+function launch_cli() {
+    echo -e "${CYAN}Launching AP1 interactive CLI...${NC}"
+    "$CLI_BIN" interactive
+}
+
 function cleanup() {
+    if [[ "$CLEANUP_ON_EXIT" != true ]]; then
+        return
+    fi
     echo -e "\n${RED}[!] Shutting down AP1...${NC}"
     pkill -f "ap1_core" || true
     pkill -f "ap1-api" || true
@@ -114,7 +187,33 @@ EOF
 echo -e "      AP1 - Rogue AP Orchestrator${NC}\n"
 echo -e "${GREEN}[*] Target Interface: $SELECTED_IFACE${NC}"
 
-build_components
-start_services
-
-"$CLI_BIN" interactive
+case "$COMMAND" in
+    start)
+        build_components
+        start_services
+        exit 0
+        ;;
+    stop)
+        stop_services
+        exit 0
+        ;;
+    status)
+        status_services
+        exit 0
+        ;;
+    interactive|cli)
+        build_components
+        start_services
+        CLEANUP_ON_EXIT=true
+        launch_cli
+        ;;
+    help|"")
+        usage
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}[!] Unknown command: $COMMAND${NC}"
+        usage
+        exit 1
+        ;;
+esac

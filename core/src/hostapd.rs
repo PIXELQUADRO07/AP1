@@ -24,6 +24,11 @@ pub fn generate_hostapd_config(profile: &Profile, iface: &str) -> String {
         "interface={}\ndriver=nl80211\nssid={}\nhw_mode={}\nchannel={}\nauth_algs=1\nwmm_enabled=1\n",
         iface, profile.ssid, hw_mode, profile.channel
     );
+    if let Some(bssid) = &profile.bssid {
+        if !bssid.is_empty() {
+            config.push_str(&format!("bssid={}\n", bssid));
+        }
+    }
 
     if profile.mode.to_lowercase() == "n" || profile.mode.to_lowercase() == "ac" {
         config.push_str("ieee80211n=1\n");

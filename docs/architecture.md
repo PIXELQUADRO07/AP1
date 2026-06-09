@@ -35,3 +35,11 @@ Main components:
 - `make api` starts the Go API
 - `make docker` starts services with Docker Compose
 - `docker compose -f docker/docker-compose.yml up --build` starts `core` and `api` in Docker containers
+
+## Fake Connection / Captive Portal Mode
+
+AP1 also supports a deception workflow with captive portal and evil twin behavior.
+
+- The tool can clone a nearby SSID and start a local rogue AP.
+- Captive portal mode uses `dnsmasq` DNS spoofing and local web redirection.
+- Traffic is typically isolated locally rather than forwarded to the real Internet.
